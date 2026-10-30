@@ -9,4 +9,9 @@ window.TOOLS = [
     path: 'markdown-viewer/index.html',
     description: 'Live Markdown editor and preview: tabs, open/save files and folders, synced scrolling, code highlighting, diagrams and math, outline, and export to HTML or PDF.',
   },
+  {
+    name: 'JWT Debugger',
+    path: 'jwt-debugger/index.html',
+    description: 'Decode, verify, create and sign JSON Web Tokens (HS, RS, PS, ES and EdDSA) entirely in your browser. Tokens and keys never leave the page.',
+  },
 ];

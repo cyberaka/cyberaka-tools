@@ -14,3 +14,9 @@ Open `index.html` in a browser to see every tool and launch one. To add a tool, 
   - Formatting toolbar and shortcuts (⌘B, ⌘I, ⌘K, ⌘E, ⇧⌘X, ⇧⌘H), copy/paste buttons, resizable and collapsible panes, light/dark theme.
   - Export to standalone HTML, print/PDF, or download the Markdown.
   - Third-party libraries are in `markdown-viewer/vendor/`, each with its license: marked, DOMPurify, highlight.js, KaTeX, Mermaid.
+- [jwt-debugger](jwt-debugger/index.html): decode, verify, create and sign JSON Web Tokens, like jwt.io but fully offline. Open `jwt-debugger/index.html` directly; no build, server or internet needed.
+  - **Privacy:** uses the browser's built-in Web Crypto. Tokens and keys are never sent anywhere and never saved (reloading clears them). Click **Help** in the page for a guide.
+  - Decodes the header and payload, explains each claim, and flags expired, not-yet-valid or unsigned (`alg: none`) tokens.
+  - Verifies HS256/384/512, RS256/384/512, PS256/384/512, ES256/384/512 and EdDSA (Ed25519) with a secret, PEM public key, certificate, JWK or JWKS (picked by `kid`).
+  - Signs new tokens with a secret or private key (PEM or JWK), and can generate secrets and key pairs, showing the public key as PEM, JWK or JWKS.
+  - No third-party libraries.

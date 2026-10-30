@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JWT Debugger</title>
+<script>
+  // Apply the saved theme before first paint to avoid a flash of the wrong colours.
+  (function () {
+    var pref = 'auto';
+    try { pref = localStorage.getItem('jwt-debugger:theme') || 'auto'; } catch (e) {}
+    var dark = pref === 'dark' || (pref === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  })();
+</script>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header>
+  <a class="home" href="../index.html" title="All tools">← Tools</a>
+  <h1>JWT Debugger</h1>
+  <nav class="modes" role="tablist" aria-label="Mode">
+    <button role="tab" id="mode-decode" aria-selected="true" aria-controls="decode">Decode &amp; verify</button>
+    <button role="tab" id="mode-encode" aria-selected="false" aria-controls="encode">Encode &amp; sign</button>
+  </nav>
+  <span class="privacy" title="Decoding, verifying and signing all happen in this page with your browser's built-in Web Crypto. Nothing is uploaded, and tokens and keys are not saved.">Runs locally · nothing is sent or saved</span>
+  <button id="help" title="How to use the JWT Debugger">Help</button>
+  <button id="theme" title="Colour theme"></button>
+</header>
+
+<!-- Decode & verify -->
+<main id="decode" class="mode" role="tabpanel" aria-labelledby="mode-decode">
+  <section class="col">
+    <div class="card c-token">
+      <div class="card-bar">
+        <b>Encoded token</b><span class="meta" id="token-meta"></span>
+        <button id="token-paste" title="Paste a token from the clipboard">Paste</button>
+        <button id="token-copy" title="Copy the token">Copy</button>
+        <button id="token-to-encoder" title="Open this token's header and payload in the encoder to change and re-sign them">Edit in encoder</button>
+        <button id="token-example" title="Load a freshly signed example token">Example</button>
+        <button id="token-clear" title="Clear the token">Clear</button>
+      </div>
+      <div class="token-box">
+        <pre id="token-colors" aria-hidden="true"></pre>
+        <textarea id="token" spellcheck="false" autocomplete="off" autocapitalize="off"
+                  aria-label="Encoded token" placeholder="Paste a JWT here: header.payload.signature"></textarea>
+      </div>
+      <div class="msg bad" id="token-error" hidden></div>
+    </div>
+
+    <div class="card c-signature">
+      <div class="card-bar"><b>Verify signature</b><span class="meta" id="verify-alg"></span></div>
+      <div class="card-body">
+        <label for="verify-key" id="verify-key-label" class="field-label">Shared secret</label>
+        <textarea id="verify-key" class="key" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+        <label class="check" id="verify-b64-label"><input type="checkbox" id="verify-b64"> Secret is base64-encoded</label>
+        <div id="verify-helpers" hidden></div>
+        <p class="hint" id="verify-hint"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <div id="verdict" class="banner idle" role="status"></div>
+    <ul id="time-status" class="checks"></ul>
+
+    <div class="card c-header">
+      <div class="card-bar"><b>Header</b><span class="meta" id="header-meta"></span><button id="header-copy" title="Copy the header as JSON">Copy</button></div>
+      <pre class="json" id="header-json"></pre>
+    </div>
+    <div class="card c-payload">
+      <div class="card-bar"><b>Payload</b><span class="meta" id="payload-meta"></span><button id="payload-copy" title="Copy the payload as JSON">Copy</button></div>
+      <pre class="json" id="payload-json"></pre>
+    </div>
+    <div class="card">
+      <div class="card-bar"><b>Claims</b><span class="meta">what each field means</span></div>
+      <table id="claims"></table>
+    </div>
+  </section>
+</main>
+
+<!-- Encode & sign -->
+<main id="encode" class="mode" role="tabpanel" aria-labelledby="mode-encode" hidden>
+  <section class="col">
+    <div class="card c-header">
+      <div class="card-bar">
+        <b>Header</b>
+        <label class="inline">Algorithm <select id="enc-alg"></select></label>
+      </div>
+      <textarea id="enc-header" class="json-edit" spellcheck="false" aria-label="Header JSON"></textarea>
+      <div class="msg bad" id="enc-header-error" hidden></div>
+    </div>
+    <div class="card c-payload">
+      <div class="card-bar">
+        <b>Payload</b><span class="meta"></span>
+        <button data-claim="iat" title="Set iat (issued at) to the current time">iat = now</button>
+        <button data-claim="exp" data-add="3600" title="Set exp (expiry) to one hour from now">exp +1 h</button>
+        <button data-claim="exp" data-add="86400" title="Set exp (expiry) to one day from now">exp +1 day</button>
+      </div>
+      <textarea id="enc-payload" class="json-edit tall" spellcheck="false" aria-label="Payload JSON"></textarea>
+      <div class="msg bad" id="enc-payload-error" hidden></div>
+    </div>
+    <div class="card c-signature">
+      <div class="card-bar"><b>Signing key</b><span class="meta" id="enc-key-meta"></span><button id="enc-generate"></button></div>
+      <div class="card-body">
+        <label for="enc-key" id="enc-key-label" class="field-label">Shared secret</label>
+        <textarea id="enc-key" class="key" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+        <label class="check" id="enc-b64-label"><input type="checkbox" id="enc-b64"> Secret is base64-encoded</label>
+        <p class="hint" id="enc-hint"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="card c-token">
+      <div class="card-bar">
+        <b>Token</b><span class="meta" id="enc-meta"></span>
+        <button id="enc-copy" title="Copy the token">Copy</button>
+        <button id="enc-open" title="Check this token in the decoder, with the matching key filled in">Open in decoder</button>
+      </div>
+      <pre id="enc-token" class="token-out"></pre>
+      <div class="msg" id="enc-error" hidden></div>
+    </div>
+    <div class="card" id="enc-public-card" hidden>
+      <div class="card-bar">
+        <b>Public key</b><span class="meta">give this to whoever verifies the token</span>
+        <select id="enc-public-format" aria-label="Public key format">
+          <option value="pem">PEM</option>
+          <option value="jwk">JWK</option>
+          <option value="jwks">JWKS</option>
+        </select>
+        <button id="enc-public-copy" title="Copy the public key">Copy</button>
+      </div>
+      <pre id="enc-public" class="key-out"></pre>
+    </div>
+  </section>
+</main>
+
+<dialog id="help-dialog" aria-labelledby="help-title">
+  <form method="dialog" class="dialog-bar">
+    <h2 id="help-title">How to use the JWT Debugger</h2>
+    <button value="close" aria-label="Close">Close</button>
+  </form>
+  <div class="dialog-body">
+    <h3>What is a JWT?</h3>
+    <p>A JSON Web Token is three base64url parts joined by dots: a <span class="t-header">header</span> (which algorithm signed it),
+      a <span class="t-payload">payload</span> (the claims, such as who the user is and when the token expires) and a
+      <span class="t-signature">signature</span>. Anyone can read the header and payload; the signature only proves the token
+      was not changed by someone without the key. Do not put secrets in a payload.</p>
+
+    <h3>Decode &amp; verify</h3>
+    <ul>
+      <li>Paste a token on the left. A leading <code>Bearer </code> and stray spaces or line breaks are ignored.</li>
+      <li>The right side shows the decoded header and payload, what each claim means, and whether the token has expired or is not valid yet. Hover a field name for a description.</li>
+      <li>To check the signature, enter the key under <b>Verify signature</b>:
+        <ul>
+          <li><b>HS256/384/512:</b> the shared secret. Tick <i>Secret is base64-encoded</i> if your secret is stored that way.</li>
+          <li><b>RS, PS, ES and EdDSA:</b> the public key as PEM (<code>BEGIN PUBLIC KEY</code> or <code>BEGIN RSA PUBLIC KEY</code>), an X.509 certificate (<code>BEGIN CERTIFICATE</code>), a JWK, or a whole JWKS. With a JWKS the key whose <code>kid</code> matches the token is used. A private key works too; its public half is used.</li>
+        </ul>
+      </li>
+      <li><b>Edit in encoder</b> copies the header and payload to the encoder so you can change a claim and sign it again.</li>
+    </ul>
+
+    <h3>Encode &amp; sign</h3>
+    <ul>
+      <li>Pick an algorithm, edit the header and payload JSON, and give a signing key. The token updates as you type.</li>
+      <li><b>Generate</b> makes a random secret, or a new key pair for RS, PS, ES and EdDSA. The private key goes in the key box; the matching public key appears on the right as PEM, JWK or JWKS.</li>
+      <li>Accepted private keys: PEM (<code>BEGIN PRIVATE KEY</code>, <code>BEGIN RSA PRIVATE KEY</code>, <code>BEGIN EC PRIVATE KEY</code>) or a JWK that includes <code>"d"</code>.</li>
+      <li>The <b>iat = now</b> and <b>exp</b> buttons set the time claims for you. JWT times are seconds since 1 January 1970 (UTC).</li>
+      <li><b>Open in decoder</b> loads the token with the matching key, so you can see it verify.</li>
+    </ul>
+
+    <h3>Supported algorithms</h3>
+    <p>HS256, HS384, HS512, RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384, ES512 and EdDSA / Ed25519
+      (Ed25519 needs a recent browser). Tokens with <code>alg: none</code> are decoded and flagged as unsigned.</p>
+
+    <h3>Privacy</h3>
+    <p>Everything happens inside this page using the browser's built-in Web Crypto. Tokens and keys are never uploaded,
+      and they are not saved: reloading the page clears them. Only your theme choice is remembered. Key URLs in a token
+      header (<code>jku</code>, <code>x5u</code>) are shown but never fetched.</p>
+
+    <h3>Not supported</h3>
+    <ul>
+      <li>Encrypted tokens (JWE, five parts).</li>
+      <li>ES256K and other algorithms the browser's Web Crypto does not offer.</li>
+      <li>Password-protected private keys. Remove the password first, for example <code>openssl pkey -in key.pem -out plain.pem</code>.</li>
+    </ul>
+  </div>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
