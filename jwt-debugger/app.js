@@ -311,6 +311,7 @@ async function loadKey(text, alg, usage, { b64 = false, header = {} } = {}) {
   if (a.kind === 'hmac') {
     let bytes;
     let note = '';
+    let pemSecret = false;
     if (trimmed.startsWith('{')) {
       const jwk = parseJson(trimmed, 'The key');
       if (!isObject(jwk) || jwk.kty !== 'oct' || typeof jwk.k !== 'string') {
@@ -326,12 +327,13 @@ async function loadKey(text, alg, usage, { b64 = false, header = {} } = {}) {
       }
     } else {
       bytes = utf8.encode(text);
-      if (/-----BEGIN /.test(text)) note = `This looks like a PEM key, but ${alg} uses a shared secret, so it is treated as plain text. `;
+      pemSecret = /-----BEGIN /.test(text);
+      if (pemSecret) note = `This looks like a PEM key, but ${alg} uses a shared secret, so it is treated as plain text. `;
     }
     if (!bytes.length) throw new Error('The secret is empty.');
     note += `${bytes.length}-byte secret`;
     if (bytes.length < a.bytes) note += `: shorter than the ${a.bytes} bytes ${alg} calls for, which makes it easier to guess`;
-    return { key: await subtle.importKey('raw', bytes, params, false, [usage]), note: note + '.' };
+    return { key: await subtle.importKey('raw', bytes, params, false, [usage]), note: note + '.', pemSecret };
   }
 
   if (trimmed.startsWith('{')) {
@@ -662,9 +664,9 @@ async function computeVerdict(t) {
   if (!keyText.trim()) {
     return { state: 'idle', text: a.kind === 'hmac' ? 'Enter the shared secret to check the signature.' : 'Paste the public key to check the signature.' };
   }
-  let key, note;
+  let key, note, pemSecret;
   try {
-    ({ key, note } = await loadKey(keyText, alg, 'verify', { b64: $('verify-b64').checked, header: t.header }));
+    ({ key, note, pemSecret } = await loadKey(keyText, alg, 'verify', { b64: $('verify-b64').checked, header: t.header }));
   } catch (e) {
     return { state: 'warn', text: e.message, keyProblem: true };
   }
@@ -676,6 +678,14 @@ async function computeVerdict(t) {
     ok = await subtle.verify(signParams(a), key, t.signature, utf8.encode(t.signingInput));
   } catch (e) {
     return { state: 'warn', text: friendlyCryptoError(e, alg), note };
+  }
+  if (ok && pemSecret) {
+    // The classic algorithm-confusion attack: an HMAC token keyed with the issuer's public key.
+    return {
+      state: 'warn',
+      text: `Signature matches, but the secret is a PEM key. This is the shape of an algorithm-confusion attack: someone signed an ${alg} token with a public key that anyone can get. Do not trust it unless the issuer really uses this text as its shared secret.`,
+      note,
+    };
   }
   return ok
     ? { state: 'good', text: 'Signature verified.', note }
@@ -749,6 +759,9 @@ setInterval(() => {
 let encodeGen = 0;
 let encoded = {};
 let encAlg = 'HS256';
+// True while the "base64-encoded" tick was set by Generate rather than by the user.
+let b64FromGenerate = false;
+let b64UntickedNote = '';
 
 const ALG_OPTIONS = [...Object.keys(ALGS), 'none'];
 $('enc-alg').innerHTML = ALG_OPTIONS.map((alg) =>
@@ -780,6 +793,8 @@ async function generateKey() {
   if (a.kind === 'hmac') {
     $('enc-key').value = bytesToB64url(crypto.getRandomValues(new Uint8Array(a.bytes)));
     $('enc-b64').checked = true;
+    b64FromGenerate = true;
+    b64UntickedNote = '';
   } else {
     const button = $('enc-generate');
     const before = $('enc-key').value;
@@ -791,6 +806,8 @@ async function generateKey() {
       if ($('enc-key').value !== before) return;
       $('enc-key').value = pem;
       $('enc-b64').checked = false;
+      b64FromGenerate = false;
+      b64UntickedNote = '';
     } catch (e) {
       $('enc-hint').textContent = friendlyCryptoError(e, encAlg);
       $('enc-hint').classList.add('warn');
@@ -901,8 +918,8 @@ async function runEncode() {
   $('enc-error').textContent = message || '';
   $('enc-error').className = `msg ${res.error ? 'bad' : 'warn'}`;
 
-  $('enc-hint').textContent = res.keyError || res.note || '';
-  $('enc-hint').classList.toggle('warn', !!res.keyError || /shorter than|looks like a PEM/.test(res.note || ''));
+  $('enc-hint').textContent = res.keyError || [b64UntickedNote, res.note].filter(Boolean).join(' ');
+  $('enc-hint').classList.toggle('warn', !!res.keyError || !!b64UntickedNote || /shorter than|looks like a PEM/.test(res.note || ''));
 
   $('enc-public-card').hidden = !res.publicPem;
   renderPublicKey();
@@ -954,8 +971,22 @@ $('enc-alg').addEventListener('change', () => {
 
 $('enc-header').addEventListener('input', onHeaderInput);
 $('enc-payload').addEventListener('input', runEncode);
-$('enc-key').addEventListener('input', runEncode);
-$('enc-b64').addEventListener('change', runEncode);
+$('enc-key').addEventListener('input', () => {
+  // A generated secret is base64; text typed or pasted over it almost never is.
+  if (b64FromGenerate) {
+    b64FromGenerate = false;
+    if ($('enc-b64').checked) {
+      $('enc-b64').checked = false;
+      b64UntickedNote = 'Unticked "Secret is base64-encoded" because the generated secret was replaced. Tick it again if your secret is base64.';
+    }
+  }
+  runEncode();
+});
+$('enc-b64').addEventListener('change', () => {
+  b64FromGenerate = false;
+  b64UntickedNote = '';
+  runEncode();
+});
 $('enc-generate').addEventListener('click', generateKey);
 $('enc-public-format').addEventListener('change', renderPublicKey);
 $('enc-copy').addEventListener('click', (e) => copyText(e.currentTarget, encoded.token));
@@ -1004,6 +1035,8 @@ $('token-to-encoder').addEventListener('click', () => {
     // Same secret, so the re-signed token still verifies.
     $('enc-key').value = $('verify-key').value;
     $('enc-b64').checked = $('verify-b64').checked;
+    b64FromGenerate = false;
+    b64UntickedNote = '';
   } else if (a && !sameFamily) {
     // Only the public key is known here, so sign with a fresh key pair instead.
     $('enc-key').value = '';
