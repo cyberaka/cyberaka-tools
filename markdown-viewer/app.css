@@ -22,6 +22,15 @@ button {
   cursor: pointer;
 }
 button:hover { border-color: var(--accent); }
+a.button {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  text-decoration: none;
+}
+a.button:hover { border-color: var(--accent); }
 button:disabled { opacity: 0.5; cursor: default; border-color: var(--border); }
 
 /* Header */

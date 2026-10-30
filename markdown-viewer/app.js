@@ -61,6 +61,8 @@ flowchart LR
 \`\`\`
 
 > Use **Open file…** or drop a \`.md\` file here to load it. **+** opens a new scratch tab.
+>
+> New here? Click **Help** at the top right for a full tour.
 `;
 
 function escapeHtml(s) {
@@ -1186,6 +1188,12 @@ function applyTheme() {
   $('theme').title = `Theme: ${themePref}. Click to switch between auto (follow the system), light and dark.`;
   if (changed && preview.querySelector('.mermaid-diagram, pre.mermaid-src')) render(); // diagrams are drawn per theme
 }
+
+// Help opens in one named tab that is reused, so the viewer itself is never opened twice.
+$('help').addEventListener('click', (e) => {
+  e.preventDefault();
+  window.open('help.html', 'markdown-viewer-help');
+});
 
 $('theme').addEventListener('click', () => {
   const order = ['auto', 'light', 'dark'];

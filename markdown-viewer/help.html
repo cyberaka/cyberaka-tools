@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Markdown Viewer · Help</title>
+<script>
+  // Use the same theme as the viewer.
+  (function () {
+    var pref = localStorage.getItem('markdown-viewer:theme') || 'auto';
+    var dark = pref === 'dark' || (pref === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  })();
+</script>
+<style>
+  :root, [data-theme="light"] {
+    color-scheme: light;
+    --bg: #ffffff;
+    --fg: #1f2328;
+    --muted: #656d76;
+    --border: #d0d7de;
+    --panel: #f6f8fa;
+    --accent: #0969da;
+    --tip-bg: #ddf4ff;
+    --code-bg: rgba(175, 184, 193, 0.2);
+  }
+  [data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #8d96a0;
+    --border: #30363d;
+    --panel: #161b22;
+    --accent: #4493f8;
+    --tip-bg: #0c2d6b;
+    --code-bg: rgba(110, 118, 129, 0.4);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  .layout { display: flex; max-width: 1100px; margin: 0 auto; }
+  nav.toc {
+    flex: 0 0 230px;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    max-height: 100vh;
+    overflow: auto;
+    padding: 32px 16px 32px 24px;
+    font-size: 14px;
+  }
+  nav.toc a { display: block; padding: 3px 0; color: var(--muted); text-decoration: none; }
+  nav.toc a:hover { color: var(--accent); }
+  nav.toc .back { margin-bottom: 16px; color: var(--accent); }
+  main { flex: 1; min-width: 0; padding: 32px 32px 80px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 24px; font-size: 16px; }
+  h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 16px; margin: 24px 0 8px; }
+  a { color: var(--accent); }
+  code, kbd {
+    font: 85% ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 5px;
+  }
+  kbd { border: 1px solid var(--border); border-bottom-width: 2px; background: var(--panel); }
+  pre { background: var(--panel); padding: 12px 16px; border-radius: 6px; overflow: auto; font-size: 13px; line-height: 1.5; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .ui {
+    display: inline-block;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: nowrap;
+  }
+  table { border-collapse: collapse; margin: 8px 0 16px; width: 100%; }
+  th, td { border: 1px solid var(--border); padding: 6px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel); }
+  .tip { background: var(--tip-bg); border-radius: 6px; padding: 10px 14px; margin: 12px 0; }
+  .tip b:first-child { margin-right: 4px; }
+  ol.steps li { margin-bottom: 6px; }
+  figure.shot { margin: 8px 0 12px; }
+  figure.shot img { display: block; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; }
+  ol.key li { margin-bottom: 4px; }
+  ol.key li::marker { color: #cf222e; font-weight: 700; }
+  @media (max-width: 800px) {
+    nav.toc { display: none; }
+    main { padding: 24px 18px 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc" aria-label="Contents">
+    <a class="back" href="index.html">← Back to the viewer</a>
+    <a href="#quick-start">Quick start</a>
+    <a href="#screen">The screen</a>
+    <a href="#documents">Scratch notes and files</a>
+    <a href="#opening">Opening files and folders</a>
+    <a href="#saving">Saving</a>
+    <a href="#watch">Reload and Watch</a>
+    <a href="#writing">Writing and formatting</a>
+    <a href="#markdown">Markdown cheat sheet</a>
+    <a href="#code-diagrams-math">Code, diagrams and math</a>
+    <a href="#preview">Preview, sync and outline</a>
+    <a href="#copy">Copy, paste and clear</a>
+    <a href="#layout">Resizing and collapsing panes</a>
+    <a href="#export">Export, print and PDF</a>
+    <a href="#theme">Light and dark theme</a>
+    <a href="#shortcuts">Keyboard shortcuts</a>
+    <a href="#browsers">Browser support</a>
+    <a href="#privacy">Privacy</a>
+    <a href="#troubleshooting">Troubleshooting</a>
+  </nav>
+
+  <main>
+    <h1>Markdown Viewer: how to use it</h1>
+    <p class="lead">Write Markdown on the left and see it rendered on the right. Everything runs in your browser: no account, no server, no upload.</p>
+
+    <h2 id="quick-start">Quick start</h2>
+    <ol class="steps">
+      <li><b>Type or paste</b> Markdown into the left pane. The preview on the right updates as you type.</li>
+      <li><b>Open a file</b> with <span class="ui">Open file…</span> (or <kbd>⌘O</kbd> / <kbd>Ctrl+O</kbd>), or drag a <code>.md</code> file onto the page. It opens in its own tab.</li>
+      <li><b>Save</b> with <span class="ui">Save</span> or <kbd>⌘S</kbd> / <kbd>Ctrl+S</kbd>.</li>
+      <li><b>Start something new</b> with the <span class="ui">+</span> next to the tabs.</li>
+      <li><b>Share the result</b>: <span class="ui">Copy</span> above the preview copies it with formatting for email or documents, and <span class="ui">Export</span> makes an HTML file or a PDF.</li>
+    </ol>
+    <div class="tip"><b>Tip:</b> Hover over any button to see what it does and its keyboard shortcut.</div>
+
+    <h2 id="screen">The screen</h2>
+    <figure class="shot">
+      <a href="help-screen.png" target="_blank" title="Open full size"><img src="help-screen.png" width="1280" height="640" alt="The Markdown Viewer with a folder sidebar, two tabs, the Markdown pane and the preview with its outline. Numbered markers point at each area."></a>
+    </figure>
+    <ol class="key">
+      <li><b>File actions:</b> <span class="ui">Open file…</span>, <span class="ui">Open folder…</span>, <span class="ui">Save</span>, <span class="ui">Save as…</span>, and for files <span class="ui">Reload</span> and <span class="ui">☐ Watch</span>.</li>
+      <li><b>Status message:</b> what's going on, for example whether the current document has unsaved changes.</li>
+      <li><b>Export</b> (HTML, PDF, .md), <b>Help</b> (this page) and the <b>theme</b> button.</li>
+      <li><b>Tabs:</b> every open document. A <b>●</b> means unsaved changes. Click to switch, <span class="ui">×</span> or middle-click to close, <span class="ui">+</span> for a new scratch note.</li>
+      <li><b>Folder sidebar:</b> appears after <span class="ui">Open folder…</span>. Click a file to open it.</li>
+      <li><b>Formatting toolbar:</b> bold, italic, headings, links, code, lists, quotes, tables.</li>
+      <li><b>Markdown pane:</b> where you type. The bar above shows the word count and reading time.</li>
+      <li><b>Divider:</b> drag to resize the panes; double-click to reset.</li>
+      <li><b>Preview pane:</b> the rendered result, updated as you type.</li>
+      <li><b>Sync scroll</b>, <b>Outline</b> and <b>Copy</b> (copies the formatted preview).</li>
+      <li><b>Outline:</b> the document's headings; click one to jump there.</li>
+      <li><b>Collapse buttons</b> <span class="ui">«</span> and <span class="ui">»</span>: hide a pane to give the other the full width.</li>
+    </ol>
+
+    <h2 id="documents">Scratch notes and files</h2>
+    <p>Each tab holds one of two kinds of document:</p>
+    <table>
+      <tr><th></th><th>Scratch note</th><th>File</th></tr>
+      <tr><td>How you get one</td><td><span class="ui">+</span>, or just start typing</td><td><span class="ui">Open file…</span>, drag and drop, or the folder sidebar</td></tr>
+      <tr><td>Tab title</td><td><i>In italics</i>, taken from the first line</td><td>The file name</td></tr>
+      <tr><td>Where it's kept</td><td>Saved automatically in this browser, and still there next time you open the viewer</td><td>On your disk. Edits stay in the tab until you <b>Save</b>.</td></tr>
+      <tr><td>Unsaved changes</td><td>Never: every keystroke is kept</td><td>Shown by a <b>●</b> on the tab</td></tr>
+    </table>
+    <p>To turn a scratch note into a file, use <span class="ui">Save as…</span> (or <span class="ui">Save</span>). The tab then becomes a file tab.</p>
+    <div class="tip"><b>Good to know:</b> scratch notes live in this browser's storage. Clearing your browsing data for this page deletes them, so save anything important as a file. File tabs aren't reopened after you reload the page; just open the file again.</div>
+
+    <h2 id="opening">Opening files and folders</h2>
+    <ul>
+      <li><span class="ui">Open file…</span> or <kbd>⌘O</kbd> / <kbd>Ctrl+O</kbd>: pick one or more Markdown files (<code>.md</code>, <code>.markdown</code>, <code>.txt</code> and similar). Each opens in a new tab.</li>
+      <li><b>Drag and drop</b> files onto the page.</li>
+      <li>Opening a file that's already open just switches to its tab.</li>
+      <li>If the current tab is an empty scratch note, the file replaces it instead of adding another tab.</li>
+    </ul>
+    <h3>Folder sidebar (Chrome and Edge)</h3>
+    <p><span class="ui">Open folder…</span> (or dragging a folder onto the page) lists every Markdown file in that folder and its subfolders in a sidebar. Click a file to open it. Hidden folders and <code>node_modules</code> are skipped. <span class="ui">↻</span> rescans the folder; <span class="ui">×</span> closes the sidebar.</p>
+
+    <h2 id="saving">Saving</h2>
+    <ul>
+      <li><span class="ui">Save</span> (<kbd>⌘S</kbd> / <kbd>Ctrl+S</kbd>) writes the current tab back to its file. The first time, the browser asks for permission to edit the file.</li>
+      <li><span class="ui">Save as…</span> (<kbd>⇧⌘S</kbd> / <kbd>Shift+Ctrl+S</kbd>) saves to a new file you choose. For a scratch note, Save does the same.</li>
+      <li>In Safari and Firefox, browsers can't write to your files, so Save <b>downloads</b> the Markdown instead.</li>
+      <li>Closing a tab with unsaved changes, or leaving the page, asks you first.</li>
+    </ul>
+
+    <h2 id="watch">Reload and Watch</h2>
+    <p>These appear in the header when the current tab is a file opened in Chrome or Edge.</p>
+    <ul>
+      <li><span class="ui">Reload</span> reads the file from disk again. If you have unsaved edits, it asks before discarding them.</li>
+      <li><span class="ui">☐ Watch</span> checks the file every second and reloads it when it changes. That's handy when another program, such as your code editor, writes the file: the preview stays live while you keep your place.</li>
+      <li>Watch never throws away your edits. If the file changes on disk while you have unsaved changes, the status message warns you. Then choose <b>Reload</b> to take the disk version, or <b>Save</b> to overwrite it with yours.</li>
+    </ul>
+
+    <h2 id="writing">Writing and formatting</h2>
+    <p>The toolbar above the Markdown text inserts Markdown for you. Select some text first to format it, or click with nothing selected to insert a placeholder you can type over. Clicking a button again on already-formatted text removes the formatting.</p>
+    <table>
+      <tr><th>Button</th><th>Does</th><th>Shortcut</th></tr>
+      <tr><td><span class="ui"><b>B</b></span> <span class="ui"><i>I</i></span> <span class="ui"><s>S</s></span></td><td>Bold, italic, strikethrough</td><td><kbd>⌘B</kbd> <kbd>⌘I</kbd> <kbd>⇧⌘X</kbd></td></tr>
+      <tr><td><span class="ui">H</span></td><td>Cycles the line through <code>#</code>, <code>##</code>, <code>###</code> and back to plain text</td><td><kbd>⇧⌘H</kbd></td></tr>
+      <tr><td><span class="ui">Link</span></td><td>Makes a link and selects the URL part so you can type or paste it</td><td><kbd>⌘K</kbd></td></tr>
+      <tr><td><span class="ui">`code`</span> <span class="ui">{ }</span></td><td>Inline code; a fenced code block around the selected lines</td><td><kbd>⌘E</kbd></td></tr>
+      <tr><td><span class="ui">•</span> <span class="ui">1.</span> <span class="ui">☐</span> <span class="ui">❝</span></td><td>Bulleted list, numbered list, task list, quote, applied to every selected line</td><td></td></tr>
+      <tr><td><span class="ui">Table</span> <span class="ui">―</span></td><td>Inserts a table template, or a horizontal rule</td><td></td></tr>
+    </table>
+    <p>On Windows and Linux, use <kbd>Ctrl</kbd> where this page shows <kbd>⌘</kbd>. <kbd>⌘Z</kbd> / <kbd>Ctrl+Z</kbd> undoes any formatting. <kbd>Tab</kbd> inserts four spaces instead of leaving the text box.</p>
+    <p>The bar above the Markdown also shows the <b>word count</b> and an estimated <b>reading time</b>.</p>
+
+    <h2 id="markdown">Markdown cheat sheet</h2>
+    <table>
+      <tr><th>Type this</th><th>To get</th></tr>
+      <tr><td><code># Heading</code>, <code>## Smaller heading</code></td><td>Headings (levels 1 to 6)</td></tr>
+      <tr><td><code>**bold**</code>, <code>_italic_</code>, <code>~~struck~~</code></td><td><b>bold</b>, <i>italic</i>, <s>struck</s></td></tr>
+      <tr><td><code>[text](https://example.com)</code></td><td>A link</td></tr>
+      <tr><td><code>![alt text](https://example.com/pic.png)</code></td><td>An image</td></tr>
+      <tr><td><code>- item</code> or <code>1. item</code></td><td>Bulleted or numbered list</td></tr>
+      <tr><td><code>- [ ] to do</code>, <code>- [x] done</code></td><td>Task list with checkboxes</td></tr>
+      <tr><td><code>&gt; quoted</code></td><td>A block quote</td></tr>
+      <tr><td><code>`code`</code></td><td>Inline code</td></tr>
+      <tr><td><code>---</code> on its own line</td><td>A horizontal rule</td></tr>
+      <tr><td><code>| A | B |</code> / <code>|---|---|</code> / <code>| 1 | 2 |</code> on three lines</td><td>A table</td></tr>
+    </table>
+    <p>Leave a blank line between paragraphs. GitHub-flavored Markdown is supported.</p>
+
+    <h2 id="code-diagrams-math">Code, diagrams and math</h2>
+    <h3>Code with syntax highlighting</h3>
+    <p>Put the language name after the opening fence:</p>
+<pre><code>```python
+def greet(name):
+    return f"Hello, {name}!"
+```</code></pre>
+    <p>Common languages work: <code>js</code>, <code>ts</code>, <code>python</code>, <code>java</code>, <code>go</code>, <code>rust</code>, <code>sql</code>, <code>bash</code>, <code>json</code>, <code>yaml</code>, <code>html</code>, <code>css</code> and many more.</p>
+    <h3>Diagrams (Mermaid)</h3>
+    <p>Use <code>mermaid</code> as the language to draw flowcharts, sequence diagrams, Gantt charts and more:</p>
+<pre><code>```mermaid
+flowchart LR
+  Idea --> Draft --> Review --> Publish
+```</code></pre>
+    <p>If a diagram has a mistake, the preview shows "Diagram error" with the reason. The <a href="https://mermaid.js.org/intro/" target="_blank" rel="noopener noreferrer">Mermaid documentation</a> lists every diagram type.</p>
+    <h3>Math (LaTeX)</h3>
+    <ul>
+      <li>Inline: <code>$E = mc^2$</code>. There must be no space just inside the dollar signs, so prices like "$5 and $10" stay as plain text.</li>
+      <li>Block: put <code>$$</code> on its own line before and after the formula:</li>
+    </ul>
+<pre><code>$$
+\sum_{i=1}^{n} i = \frac{n(n+1)}{2}
+$$</code></pre>
+
+    <h2 id="preview">Preview, sync and outline</h2>
+    <ul>
+      <li><span class="ui">☑ Sync scroll</span> keeps both panes at the same place in the document. Scroll either side and the other follows. Untick it to scroll them separately.</li>
+      <li><span class="ui">Outline</span> shows a list of headings beside the preview. Click one to jump there in both panes; the current section is highlighted as you scroll.</li>
+      <li>Links in the preview open in a new browser tab.</li>
+    </ul>
+
+    <h2 id="copy">Copy, paste and clear</h2>
+    <ul>
+      <li><span class="ui">Copy</span> above the Markdown copies the Markdown text.</li>
+      <li><span class="ui">Paste</span> inserts your clipboard at the cursor. The browser may ask for permission the first time; <kbd>⌘V</kbd> / <kbd>Ctrl+V</kbd> always works too.</li>
+      <li><span class="ui">Copy</span> above the preview copies the <b>formatted</b> result. Paste it into an email, Google Docs, Word or Slack and it keeps its headings, bold text, lists and tables.</li>
+      <li><span class="ui">Clear</span> empties a scratch note (<kbd>⌘Z</kbd> brings the text back). On a file tab it never touches the file: it opens a fresh empty scratch tab instead, ready for something new.</li>
+    </ul>
+
+    <h2 id="layout">Resizing and collapsing panes</h2>
+    <ul>
+      <li><b>Drag the divider</b> between the panes to resize them. Double-click it to go back to 50/50. You can also click it and use the arrow keys (hold <kbd>Shift</kbd> for bigger steps).</li>
+      <li><span class="ui">«</span> collapses the Markdown pane and <span class="ui">»</span> collapses the preview, giving the other pane the full width. Click the thin strip to bring it back.</li>
+      <li>Your layout, theme, and the Sync scroll and Outline settings are remembered for next time.</li>
+      <li>In a narrow window the panes stack vertically.</li>
+    </ul>
+
+    <h2 id="export">Export, print and PDF</h2>
+    <p>The <span class="ui">Export</span> menu has three options:</p>
+    <ul>
+      <li><b>Download as HTML</b>: a single, self-contained web page of the preview that anyone can open in a browser.</li>
+      <li><b>Print / Save as PDF</b>: prints just the preview, in light colours. To get a PDF, choose "Save as PDF" as the printer in the print dialog.</li>
+      <li><b>Download Markdown (.md)</b>: the Markdown text as a file.</li>
+    </ul>
+
+    <h2 id="theme">Light and dark theme</h2>
+    <p>The theme button in the header cycles through <span class="ui">◐ Auto</span> (follow your computer's setting), <span class="ui">☀ Light</span> and <span class="ui">☾ Dark</span>.</p>
+
+    <h2 id="shortcuts">Keyboard shortcuts</h2>
+    <p>On Windows and Linux use <kbd>Ctrl</kbd> instead of <kbd>⌘</kbd>, and <kbd>Shift</kbd> for <kbd>⇧</kbd>.</p>
+    <table>
+      <tr><th>Shortcut</th><th>Action</th></tr>
+      <tr><td><kbd>⌘O</kbd></td><td>Open files</td></tr>
+      <tr><td><kbd>⌘S</kbd></td><td>Save</td></tr>
+      <tr><td><kbd>⇧⌘S</kbd></td><td>Save as</td></tr>
+      <tr><td><kbd>⌘B</kbd> / <kbd>⌘I</kbd> / <kbd>⇧⌘X</kbd></td><td>Bold / italic / strikethrough</td></tr>
+      <tr><td><kbd>⌘K</kbd></td><td>Link</td></tr>
+      <tr><td><kbd>⌘E</kbd></td><td>Inline code</td></tr>
+      <tr><td><kbd>⇧⌘H</kbd></td><td>Cycle heading level</td></tr>
+      <tr><td><kbd>⌘Z</kbd></td><td>Undo</td></tr>
+      <tr><td><kbd>Tab</kbd></td><td>Indent (four spaces)</td></tr>
+    </table>
+    <p>Formatting shortcuts work while the cursor is in the Markdown pane.</p>
+
+    <h2 id="browsers">Browser support</h2>
+    <table>
+      <tr><th>Feature</th><th>Chrome, Edge (and other Chromium browsers)</th><th>Safari, Firefox</th></tr>
+      <tr><td>Writing, preview, tabs, export, everything else</td><td>Yes</td><td>Yes</td></tr>
+      <tr><td>Save straight back to the file</td><td>Yes</td><td>Downloads a copy instead</td></tr>
+      <tr><td>Reload and Watch</td><td>Yes</td><td>No (files open as copies)</td></tr>
+      <tr><td>Open folder sidebar</td><td>Yes</td><td>No</td></tr>
+    </table>
+
+    <h2 id="privacy">Privacy</h2>
+    <p>Nothing you type or open is sent anywhere. The viewer is a set of files on your computer; all its libraries are included, so it works offline. Scratch notes and settings are stored only in this browser.</p>
+    <p>One exception: an exported HTML file that contains math links to the KaTeX style sheet on a public CDN (jsDelivr), so the formulas display properly wherever the file is opened.</p>
+
+    <h2 id="troubleshooting">Troubleshooting</h2>
+    <h3>Paste says "Blocked"</h3>
+    <p>The browser didn't allow clipboard access. Click in the Markdown pane and press <kbd>⌘V</kbd> / <kbd>Ctrl+V</kbd>, or allow clipboard access for this page in your browser's site settings.</p>
+    <h3>Save asks for permission</h3>
+    <p>That's expected: the browser checks once that you want this page to edit the file. Choose "Save changes" or "Allow".</p>
+    <h3>The status message says the file "changed on disk"</h3>
+    <p>Another program changed the file while you had unsaved edits. <b>Reload</b> takes the version on disk (your edits are discarded); <b>Save</b> keeps your version and overwrites the file.</p>
+    <h3>My scratch notes disappeared</h3>
+    <p>They are stored in the browser, so clearing site data, using a private window, or opening the viewer in a different browser starts fresh. Save important notes as files.</p>
+    <h3>A diagram or formula shows as plain text</h3>
+    <p>Check the syntax: diagrams need <code>```mermaid</code>, block math needs <code>$$</code> on its own lines, and inline math can't have spaces just inside the <code>$</code> signs.</p>
+
+    <p style="margin-top: 48px;"><a class="back" href="index.html">← Back to the viewer</a></p>
+  </main>
+</div>
+<script>
+  // When opened from the viewer's Help button, close this tab instead of loading a second viewer
+  // (two viewer tabs would each save their own copy of the scratch notes).
+  if (window.name === 'markdown-viewer-help' && window.opener) {
+    for (const a of document.querySelectorAll('a.back')) {
+      a.textContent = '← Close help and return to the viewer';
+      a.addEventListener('click', (e) => { e.preventDefault(); window.close(); });
+    }
+  }
+</script>
+</body>
+</html>
