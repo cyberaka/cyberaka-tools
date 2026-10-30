@@ -44,6 +44,7 @@
     border-bottom: 1px solid var(--border);
     background: var(--panel);
   }
+  header > *:not(#status) { flex-shrink: 0; white-space: nowrap; }
   header h1 { font-size: 15px; margin: 0 12px 0 0; }
   header a.home { color: var(--muted); text-decoration: none; margin-right: 4px; }
   header a.home:hover { color: var(--accent); }
@@ -59,15 +60,56 @@
   button:hover { border-color: var(--accent); }
   button:disabled { opacity: 0.5; cursor: default; border-color: var(--border); }
   #status { color: var(--muted); margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #file-chip { display: flex; align-items: center; gap: 6px; padding-left: 8px; border-left: 1px solid var(--border); }
+  #file-name { font-weight: 600; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   label.watch { display: flex; align-items: center; gap: 4px; color: var(--muted); }
 
   main { flex: 1; display: flex; min-height: 0; }
-  #source, #preview { flex: 1; min-width: 0; overflow: auto; }
+  .pane { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  #left-pane { flex: 0 0 var(--split, 50%); }
+  main.right-collapsed #left-pane { flex: 1 1 0; }
+
+  /* Draggable divider: a 1px line with a wider invisible grab area. */
+  #divider {
+    flex: 0 0 7px;
+    margin: 0 -3px;
+    position: relative;
+    z-index: 1;
+    cursor: col-resize;
+    touch-action: none;
+    background: linear-gradient(var(--border), var(--border)) center / 1px 100% no-repeat;
+  }
+  #divider:hover, #divider:focus-visible, main.resizing #divider {
+    background: linear-gradient(var(--accent), var(--accent)) center / 3px 100% no-repeat;
+    outline: none;
+  }
+  main.resizing { cursor: col-resize; user-select: none; }
+  main.left-collapsed #divider, main.right-collapsed #divider { cursor: default; pointer-events: none; }
+
+  /* Collapsed pane: a narrow strip with its name and an expand button. */
+  .pane.collapsed { flex: 0 0 34px !important; }
+  .pane.collapsed > :not(.pane-bar) { display: none; }
+  .pane.collapsed .pane-bar { flex: 1; flex-direction: column; padding: 8px 0; border-bottom: 0; cursor: pointer; }
+  .pane.collapsed .pane-bar span { order: 1; margin: 8px 0 0; writing-mode: vertical-rl; }
+  .pane.collapsed .pane-bar button:not(.toggle) { display: none; }
+  .pane-bar button.toggle { padding: 2px 7px; }
+
+  .pane-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 4px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .pane-bar span { margin-right: auto; text-transform: uppercase; letter-spacing: 0.04em; }
+  .pane-bar button { font-size: 12px; padding: 2px 10px; }
+  #source, #preview { flex: 1; min-height: 0; overflow: auto; }
   #source {
     margin: 0;
     padding: 16px;
     border: 0;
-    border-right: 1px solid var(--border);
     resize: none;
     outline: none;
     background: var(--bg);
@@ -100,8 +142,15 @@
   .markdown li > input[type="checkbox"] { margin-right: 0.4em; }
 
   @media (max-width: 700px) {
+    /* Stacked layout: no dragging; collapsing shrinks a pane to its title bar. */
     main { flex-direction: column; }
-    #source { border-right: 0; border-bottom: 1px solid var(--border); }
+    #left-pane { flex: 1 1 0; }
+    #divider { display: none; }
+    .pane + .pane { border-top: 1px solid var(--border); }
+    .pane.collapsed { flex: 0 0 auto !important; }
+    .pane.collapsed .pane-bar { flex-direction: row; padding: 4px 8px 4px 16px; }
+    .pane.collapsed .pane-bar span { order: 0; margin: 0 auto 0 0; writing-mode: horizontal-tb; }
+    .pane-bar button.toggle { transform: rotate(90deg); }
   }
 </style>
 </head>
@@ -110,6 +159,10 @@
   <a class="home" href="../index.html" title="All tools">← Tools</a>
   <h1>Markdown Viewer</h1>
   <button id="open" title="Open a Markdown file from your computer">Open file…</button>
+  <span id="file-chip" hidden title="The left pane shows this file. Close it to go back to your own scratch text.">
+    <span id="file-name"></span>
+    <button id="close-file">Close file</button>
+  </span>
   <button id="reload" disabled title="Re-read the opened file from disk">Reload</button>
   <label class="watch" id="watch-label" hidden title="Re-read the file whenever it changes on disk">
     <input type="checkbox" id="watch"> Watch
@@ -118,8 +171,26 @@
   <span id="status">Type or paste Markdown, open a file, or drop one on the left pane.</span>
 </header>
 <main id="main">
-  <textarea id="source" spellcheck="false" placeholder="# Type Markdown here"></textarea>
-  <article id="preview" class="markdown"></article>
+  <section class="pane" id="left-pane">
+    <div class="pane-bar">
+      <span>Markdown</span>
+      <button id="copy-source" title="Copy the Markdown text">Copy</button>
+      <button id="paste-source" title="Paste from the clipboard at the cursor">Paste</button>
+      <button id="clear-source" title="Empty the pane to start fresh (closes an open file; ⌘Z / Ctrl+Z undoes)">Clear</button>
+      <button class="toggle" id="toggle-left" title="Collapse the Markdown pane" aria-expanded="true">«</button>
+    </div>
+    <textarea id="source" spellcheck="false" placeholder="# Type Markdown here"></textarea>
+  </section>
+  <div id="divider" role="separator" aria-orientation="vertical" aria-label="Resize panes" tabindex="0"
+       title="Drag to resize · double-click to reset · arrow keys to nudge"></div>
+  <section class="pane" id="right-pane">
+    <div class="pane-bar">
+      <span>Preview</span>
+      <button id="copy-preview" title="Copy the rendered output, with formatting, for email, docs, etc.">Copy</button>
+      <button class="toggle" id="toggle-right" title="Collapse the Preview pane" aria-expanded="true">»</button>
+    </div>
+    <article id="preview" class="markdown"></article>
+  </section>
 </main>
 
 <script src="vendor/marked.umd.js"></script>
@@ -134,13 +205,19 @@
   const watchBox = document.getElementById('watch');
   const fileInput = document.getElementById('file-input');
   const main = document.getElementById('main');
+  const fileChip = document.getElementById('file-chip');
+  const fileNameEl = document.getElementById('file-name');
 
   const DRAFT_KEY = 'markdown-viewer:draft';
   // The File System Access API (Chromium browsers) keeps a handle to the file, so it can be
   // re-read later; elsewhere we fall back to a plain file input, which is a one-time snapshot.
   const hasFsAccess = 'showOpenFilePicker' in window;
 
-  let fileHandle = null;
+  // Two modes: scratch (fileName is null; text is kept in localStorage) and file (a file was opened).
+  // The scratch draft is never overwritten while a file is open, so closing the file restores it.
+  let fileName = null;
+  let fileHandle = null; // only for files opened through the File System Access API
+  let fileEdited = false;
   let lastModified = 0;
   let watchTimer = null;
 
@@ -159,7 +236,14 @@
 
   let renderQueued = false;
   source.addEventListener('input', () => {
-    if (!fileHandle) localStorage.setItem(DRAFT_KEY, source.value);
+    if (!fileName) {
+      localStorage.setItem(DRAFT_KEY, source.value);
+    } else if (!fileEdited) {
+      // Edits to an opened file are a local copy; stop watching so they aren't overwritten.
+      fileEdited = true;
+      stopWatching();
+      setStatus(`${fileName} · edited here, not saved to the file${fileHandle ? ' (Reload discards edits)' : ''}`);
+    }
     if (renderQueued) return;
     renderQueued = true;
     requestAnimationFrame(() => { renderQueued = false; render(); });
@@ -180,6 +264,7 @@
   async function readHandle() {
     const file = await fileHandle.getFile();
     lastModified = file.lastModified;
+    fileEdited = false;
     source.value = await file.text();
     render();
     setStatus(`${file.name} · loaded ${new Date().toLocaleTimeString()}`);
@@ -191,25 +276,56 @@
     watchBox.checked = false;
   }
 
-  async function useHandle(handle) {
+  function enterFileMode(name, handle) {
     stopWatching();
+    fileName = name;
     fileHandle = handle;
-    reloadBtn.disabled = false;
-    watchLabel.hidden = false;
+    fileEdited = false;
+    fileNameEl.textContent = name;
+    fileChip.hidden = false;
+    reloadBtn.disabled = !handle;
+    watchLabel.hidden = !handle;
+  }
+
+  function closeFile() {
+    stopWatching();
+    fileName = null;
+    fileHandle = null;
+    fileChip.hidden = true;
+    reloadBtn.disabled = true;
+    watchLabel.hidden = true;
+    source.value = localStorage.getItem(DRAFT_KEY) ?? '';
+    render();
+    setStatus('Scratch: type or paste Markdown. It is kept in this browser.');
+  }
+
+  async function useHandle(handle) {
+    const file = await handle.getFile();
+    enterFileMode(file.name, handle);
     await readHandle();
   }
 
-  function useSnapshot(file) {
-    stopWatching();
-    fileHandle = null;
-    reloadBtn.disabled = true;
-    watchLabel.hidden = true;
-    file.text().then((text) => {
-      source.value = text;
-      render();
-      setStatus(`${file.name} · edits here are not saved to the file`);
-    });
+  async function useSnapshot(file) {
+    const text = await file.text();
+    enterFileMode(file.name, null);
+    source.value = text;
+    render();
+    setStatus(`${file.name} · edits here are not saved to the file`);
   }
+
+  document.getElementById('close-file').addEventListener('click', () => {
+    closeFile();
+    source.focus();
+  });
+
+  // Clear goes back to scratch mode if a file is open, then empties the pane in an undoable way.
+  document.getElementById('clear-source').addEventListener('click', () => {
+    if (fileName) closeFile();
+    source.focus();
+    source.select();
+    document.execCommand('delete');
+    setStatus('Cleared. Type or paste Markdown (⌘Z / Ctrl+Z to undo).');
+  });
 
   openBtn.addEventListener('click', async () => {
     if (!hasFsAccess) { fileInput.click(); return; }
@@ -244,6 +360,131 @@
       }
     }, 1000);
   });
+
+  // Copy / paste buttons. The button label briefly confirms the result.
+  function flash(button, text) {
+    clearTimeout(button.flashTimer);
+    button.dataset.label ??= button.textContent;
+    button.textContent = text;
+    button.flashTimer = setTimeout(() => { button.textContent = button.dataset.label; }, 1500);
+  }
+
+  document.getElementById('copy-source').addEventListener('click', async (e) => {
+    const button = e.currentTarget; // currentTarget is cleared once the handler awaits
+    try {
+      await navigator.clipboard.writeText(source.value);
+      flash(button, 'Copied');
+    } catch (err) {
+      flash(button, 'Failed');
+      setStatus(`Could not copy: ${err.message}`);
+    }
+  });
+
+  document.getElementById('paste-source').addEventListener('click', async (e) => {
+    const button = e.currentTarget;
+    try {
+      const text = await navigator.clipboard.readText();
+      source.focus();
+      // insertText keeps the browser's undo history and fires 'input', which re-renders.
+      document.execCommand('insertText', false, text);
+      flash(button, 'Pasted');
+    } catch (err) {
+      flash(button, 'Blocked');
+      setStatus('The browser blocked clipboard access. Click in the left pane and press ⌘V / Ctrl+V instead.');
+    }
+  });
+
+  // Copy the preview as rich text (HTML) so formatting survives a paste into email or a document,
+  // with a plain-text version for apps that only accept text.
+  document.getElementById('copy-preview').addEventListener('click', async (e) => {
+    const button = e.currentTarget;
+    const html = preview.innerHTML;
+    const text = preview.innerText;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+      })]);
+      flash(button, 'Copied');
+    } catch (err) {
+      flash(button, 'Failed');
+      setStatus(`Could not copy: ${err.message}`);
+    }
+  });
+
+  // Resizable split and collapsible panes. The layout is remembered between visits.
+  const LAYOUT_KEY = 'markdown-viewer:layout';
+  const MIN_PANE_PX = 160;
+  const divider = document.getElementById('divider');
+  const panes = {
+    left: { el: document.getElementById('left-pane'), toggle: document.getElementById('toggle-left'), name: 'Markdown', collapseIcon: '«', expandIcon: '»' },
+    right: { el: document.getElementById('right-pane'), toggle: document.getElementById('toggle-right'), name: 'Preview', collapseIcon: '»', expandIcon: '«' },
+  };
+  let layout = { split: 50, collapsed: null };
+  try { Object.assign(layout, JSON.parse(localStorage.getItem(LAYOUT_KEY))); } catch {}
+
+  function applyLayout() {
+    main.style.setProperty('--split', `${layout.split}%`);
+    main.classList.toggle('left-collapsed', layout.collapsed === 'left');
+    main.classList.toggle('right-collapsed', layout.collapsed === 'right');
+    for (const [side, p] of Object.entries(panes)) {
+      const collapsed = layout.collapsed === side;
+      p.el.classList.toggle('collapsed', collapsed);
+      p.toggle.textContent = collapsed ? p.expandIcon : p.collapseIcon;
+      p.toggle.title = `${collapsed ? 'Expand' : 'Collapse'} the ${p.name} pane`;
+      p.toggle.setAttribute('aria-expanded', String(!collapsed));
+    }
+    divider.setAttribute('aria-valuenow', String(Math.round(layout.split)));
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+  }
+
+  // Collapsing one pane while the other is collapsed swaps them, so one pane is always visible.
+  function toggleSide(side) {
+    layout.collapsed = layout.collapsed === side ? null : side;
+    applyLayout();
+  }
+  for (const [side, p] of Object.entries(panes)) {
+    p.toggle.addEventListener('click', (e) => { e.stopPropagation(); toggleSide(side); });
+    // When collapsed, the whole strip is a click target to expand.
+    p.el.querySelector('.pane-bar').addEventListener('click', () => {
+      if (layout.collapsed === side) toggleSide(side);
+    });
+  }
+
+  function setSplitFromX(clientX) {
+    const rect = main.getBoundingClientRect();
+    const min = Math.min(MIN_PANE_PX, rect.width / 2);
+    const x = Math.max(min, Math.min(rect.width - min, clientX - rect.left));
+    layout.split = (x / rect.width) * 100;
+    applyLayout();
+  }
+
+  divider.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    divider.setPointerCapture(e.pointerId);
+    main.classList.add('resizing');
+  });
+  divider.addEventListener('pointermove', (e) => {
+    if (divider.hasPointerCapture(e.pointerId)) setSplitFromX(e.clientX);
+  });
+  const endResize = (e) => {
+    if (divider.hasPointerCapture(e.pointerId)) divider.releasePointerCapture(e.pointerId);
+    main.classList.remove('resizing');
+  };
+  divider.addEventListener('pointerup', endResize);
+  divider.addEventListener('pointercancel', endResize);
+  divider.addEventListener('dblclick', () => { layout.split = 50; applyLayout(); });
+  divider.addEventListener('keydown', (e) => {
+    const step = e.shiftKey ? 10 : 2;
+    if (e.key === 'ArrowLeft') layout.split = Math.max(10, layout.split - step);
+    else if (e.key === 'ArrowRight') layout.split = Math.min(90, layout.split + step);
+    else return;
+    e.preventDefault();
+    applyLayout();
+  });
+
+  applyLayout();
 
   // Drag and drop a file onto either pane.
   main.addEventListener('dragover', (e) => {
