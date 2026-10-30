@@ -1,0 +1,251 @@
+/* Layout and controls for the Markdown Viewer. Colours and rendered-Markdown styles live in the
+   #doc-style block in index.html, because "Export HTML" copies that block into the exported file. */
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+button {
+  font: inherit;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; border-color: var(--border); }
+
+/* Header */
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+header > *:not(#status) { flex-shrink: 0; white-space: nowrap; }
+header h1 { font-size: 15px; margin: 0 8px 0 0; }
+header a.home { color: var(--muted); text-decoration: none; margin-right: 4px; }
+header a.home:hover { color: var(--accent); }
+header .group { display: flex; align-items: center; gap: 6px; padding-left: 8px; border-left: 1px solid var(--border); }
+#status { color: var(--muted); margin-left: auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#status.warn { color: var(--warn); }
+label.check { display: flex; align-items: center; gap: 4px; color: var(--muted); cursor: pointer; }
+
+/* Export menu */
+details.menu { position: relative; }
+details.menu summary {
+  list-style: none;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+}
+details.menu summary::-webkit-details-marker { display: none; }
+details.menu summary:hover { border-color: var(--accent); }
+details.menu .menu-items {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+details.menu .menu-items button { border: 0; text-align: left; border-radius: 4px; }
+details.menu .menu-items button:hover { background: var(--panel); }
+
+/* Tabs */
+#tabs {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  min-height: 34px;
+}
+#tab-list { display: flex; overflow-x: auto; scrollbar-width: thin; }
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 0 6px 0 12px;
+  border-right: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--fg); }
+.tab[aria-selected="true"] { background: var(--bg); color: var(--fg); box-shadow: inset 0 2px var(--accent); }
+.tab .tab-title { overflow: hidden; text-overflow: ellipsis; }
+.tab.scratch .tab-title { font-style: italic; }
+.tab .tab-dirty { color: var(--accent); font-size: 10px; }
+.tab .tab-close { border: 0; padding: 0 5px; background: transparent; color: inherit; font-size: 15px; line-height: 1; border-radius: 4px; }
+.tab .tab-close:hover { background: var(--border); }
+#new-tab { border: 0; border-radius: 0; background: transparent; padding: 0 12px; font-size: 16px; color: var(--muted); }
+#new-tab:hover { color: var(--accent); }
+
+/* Main area: optional folder sidebar, then the editor/preview split. */
+main { flex: 1; display: flex; min-height: 0; }
+main.dragging #source { outline: 2px dashed var(--accent); outline-offset: -8px; }
+
+#files { flex: 0 0 220px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); background: var(--panel); }
+#folder-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#file-tree { flex: 1; overflow: auto; margin: 0; padding: 6px 0; font-size: 13px; }
+#file-tree ul { list-style: none; margin: 0; padding-left: 12px; }
+#file-tree > ul { padding-left: 4px; }
+#file-tree summary { padding: 2px 8px; cursor: pointer; color: var(--muted); white-space: nowrap; }
+#file-tree button {
+  display: block;
+  width: 100%;
+  padding: 2px 8px 2px 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#file-tree button:hover { background: var(--bg); }
+#file-tree button.active { background: var(--bg); color: var(--accent); font-weight: 600; }
+#file-tree .empty { padding: 4px 12px; color: var(--muted); }
+
+#split { flex: 1; display: flex; min-width: 0; min-height: 0; }
+.pane { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+#left-pane { flex: 0 0 var(--split, 50%); }
+#split.right-collapsed #left-pane { flex: 1 1 0; }
+
+/* Draggable divider: a 1px line with a wider invisible grab area. */
+#divider {
+  flex: 0 0 7px;
+  margin: 0 -3px;
+  position: relative;
+  z-index: 1;
+  cursor: col-resize;
+  touch-action: none;
+  background: linear-gradient(var(--border), var(--border)) center / 1px 100% no-repeat;
+}
+#divider:hover, #divider:focus-visible, #split.resizing #divider {
+  background: linear-gradient(var(--accent), var(--accent)) center / 3px 100% no-repeat;
+  outline: none;
+}
+#split.resizing { cursor: col-resize; user-select: none; }
+#split.left-collapsed #divider, #split.right-collapsed #divider { cursor: default; pointer-events: none; }
+
+/* Collapsed pane: a narrow strip with its name and an expand button. */
+.pane.collapsed { flex: 0 0 34px !important; }
+.pane.collapsed > :not(.pane-bar) { display: none; }
+.pane.collapsed .pane-bar { flex: 1; flex-direction: column; padding: 8px 0; border-bottom: 0; cursor: pointer; }
+.pane.collapsed .pane-bar .pane-title { order: 1; margin: 8px 0 0; writing-mode: vertical-rl; }
+.pane.collapsed .pane-bar > :not(.toggle):not(.pane-title) { display: none; }
+.pane.collapsed .pane-bar .pane-meta { display: none; }
+
+.pane-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.pane-title { margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pane-title b { font-weight: normal; text-transform: uppercase; letter-spacing: 0.04em; }
+.pane-meta { margin-left: 8px; }
+.pane-bar button { font-size: 12px; padding: 2px 10px; }
+.pane-bar button.toggle { padding: 2px 7px; }
+.pane-bar button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.pane-bar label.check { font-size: 12px; }
+
+/* Formatting toolbar */
+#format-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+#format-bar button { min-width: 28px; padding: 1px 6px; font-size: 13px; border-color: transparent; background: transparent; }
+#format-bar button:hover { border-color: var(--border); background: var(--panel); }
+#format-bar .sep { width: 1px; margin: 3px 4px; background: var(--border); }
+
+#source {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 16px;
+  border: 0;
+  resize: none;
+  outline: none;
+  overflow: auto;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  tab-size: 4;
+}
+/* Hidden copy of the textarea used to measure where each source line sits, for scroll sync. */
+#mirror {
+  position: absolute;
+  top: 0;
+  left: -10000px;
+  visibility: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  pointer-events: none;
+}
+
+.preview-wrap { flex: 1; display: flex; min-height: 0; }
+#preview { flex: 1; min-width: 0; overflow: auto; padding: 16px 32px; position: relative; }
+#outline {
+  flex: 0 0 220px;
+  overflow: auto;
+  padding: 10px 0;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 13px;
+}
+#outline .outline-title { padding: 0 14px 6px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+#outline a { display: block; padding: 2px 14px; color: var(--fg); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid transparent; }
+#outline a:hover { color: var(--accent); }
+#outline a.active { color: var(--accent); border-left-color: var(--accent); }
+#outline .empty { padding: 2px 14px; color: var(--muted); }
+
+@media (max-width: 700px) {
+  /* Stacked layout: no dragging; collapsing shrinks a pane to its title bar. */
+  main { flex-direction: column; }
+  #files { flex: 0 0 auto; max-height: 30vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  #split { flex-direction: column; }
+  #left-pane { flex: 1 1 0; }
+  #divider { display: none; }
+  .pane + .pane { border-top: 1px solid var(--border); }
+  .pane.collapsed { flex: 0 0 auto !important; }
+  .pane.collapsed .pane-bar { flex-direction: row; padding: 4px 8px 4px 16px; }
+  .pane.collapsed .pane-bar .pane-title { order: 0; margin: 0 auto 0 0; writing-mode: horizontal-tb; }
+  .pane-bar button.toggle { transform: rotate(90deg); }
+  #outline { display: none; }
+}
+
+@media print {
+  header, #tabs, #files, #left-pane, #divider, #right-pane > .pane-bar, #outline { display: none !important; }
+  html, body, main, #split, #right-pane, .preview-wrap, #preview { display: block !important; height: auto !important; overflow: visible !important; }
+  #right-pane { flex: none !important; }
+  #preview { padding: 0; }
+}

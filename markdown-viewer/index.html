@@ -4,126 +4,43 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Markdown Viewer</title>
-<style>
-  :root {
+<script>
+  // Apply the saved theme before first paint to avoid a flash of the wrong colours.
+  (function () {
+    var pref = localStorage.getItem('markdown-viewer:theme') || 'auto';
+    var dark = pref === 'dark' || (pref === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  })();
+</script>
+<!-- Colours and rendered-Markdown styles. "Export HTML" copies this block into the exported file. -->
+<style id="doc-style">
+  :root, [data-theme="light"] {
+    color-scheme: light;
     --bg: #ffffff;
     --fg: #1f2328;
     --muted: #656d76;
     --border: #d0d7de;
     --panel: #f6f8fa;
     --accent: #0969da;
+    --warn: #9a6700;
     --code-bg: rgba(175, 184, 193, 0.2);
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0d1117;
-      --fg: #e6edf3;
-      --muted: #8d96a0;
-      --border: #30363d;
-      --panel: #161b22;
-      --accent: #4493f8;
-      --code-bg: rgba(110, 118, 129, 0.4);
-    }
-  }
-  * { box-sizing: border-box; }
-  [hidden] { display: none !important; }
-  html, body { height: 100%; margin: 0; }
-  body {
-    display: flex;
-    flex-direction: column;
-    background: var(--bg);
-    color: var(--fg);
-    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  [data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #8d96a0;
+    --border: #30363d;
+    --panel: #161b22;
+    --accent: #4493f8;
+    --warn: #d29922;
+    --code-bg: rgba(110, 118, 129, 0.4);
   }
 
-  header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-    background: var(--panel);
-  }
-  header > *:not(#status) { flex-shrink: 0; white-space: nowrap; }
-  header h1 { font-size: 15px; margin: 0 12px 0 0; }
-  header a.home { color: var(--muted); text-decoration: none; margin-right: 4px; }
-  header a.home:hover { color: var(--accent); }
-  button {
-    font: inherit;
-    padding: 4px 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg);
-    color: var(--fg);
-    cursor: pointer;
-  }
-  button:hover { border-color: var(--accent); }
-  button:disabled { opacity: 0.5; cursor: default; border-color: var(--border); }
-  #status { color: var(--muted); margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #file-chip { display: flex; align-items: center; gap: 6px; padding-left: 8px; border-left: 1px solid var(--border); }
-  #file-name { font-weight: 600; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  label.watch { display: flex; align-items: center; gap: 4px; color: var(--muted); }
-
-  main { flex: 1; display: flex; min-height: 0; }
-  .pane { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-  #left-pane { flex: 0 0 var(--split, 50%); }
-  main.right-collapsed #left-pane { flex: 1 1 0; }
-
-  /* Draggable divider: a 1px line with a wider invisible grab area. */
-  #divider {
-    flex: 0 0 7px;
-    margin: 0 -3px;
-    position: relative;
-    z-index: 1;
-    cursor: col-resize;
-    touch-action: none;
-    background: linear-gradient(var(--border), var(--border)) center / 1px 100% no-repeat;
-  }
-  #divider:hover, #divider:focus-visible, main.resizing #divider {
-    background: linear-gradient(var(--accent), var(--accent)) center / 3px 100% no-repeat;
-    outline: none;
-  }
-  main.resizing { cursor: col-resize; user-select: none; }
-  main.left-collapsed #divider, main.right-collapsed #divider { cursor: default; pointer-events: none; }
-
-  /* Collapsed pane: a narrow strip with its name and an expand button. */
-  .pane.collapsed { flex: 0 0 34px !important; }
-  .pane.collapsed > :not(.pane-bar) { display: none; }
-  .pane.collapsed .pane-bar { flex: 1; flex-direction: column; padding: 8px 0; border-bottom: 0; cursor: pointer; }
-  .pane.collapsed .pane-bar span { order: 1; margin: 8px 0 0; writing-mode: vertical-rl; }
-  .pane.collapsed .pane-bar button:not(.toggle) { display: none; }
-  .pane-bar button.toggle { padding: 2px 7px; }
-
-  .pane-bar {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px 4px 16px;
-    border-bottom: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 12px;
-  }
-  .pane-bar span { margin-right: auto; text-transform: uppercase; letter-spacing: 0.04em; }
-  .pane-bar button { font-size: 12px; padding: 2px 10px; }
-  #source, #preview { flex: 1; min-height: 0; overflow: auto; }
-  #source {
-    margin: 0;
-    padding: 16px;
-    border: 0;
-    resize: none;
-    outline: none;
-    background: var(--bg);
-    color: var(--fg);
-    font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    tab-size: 4;
-  }
-  main.dragging #source { outline: 2px dashed var(--accent); outline-offset: -8px; }
-  #preview { padding: 16px 32px; }
-
-  /* Rendered Markdown */
-  .markdown > :first-child { margin-top: 0; }
+  .markdown { line-height: 1.6; overflow-wrap: break-word; }
+  .markdown > :first-child, .markdown > :first-child > :first-child { margin-top: 0; }
   .markdown h1, .markdown h2 { border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
-  .markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: 1.4em 0 0.6em; line-height: 1.25; }
+  .markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 { margin: 1.4em 0 0.6em; line-height: 1.25; }
   .markdown a { color: var(--accent); }
   .markdown code {
     font: 85% ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -131,8 +48,8 @@
     padding: 0.2em 0.4em;
     border-radius: 6px;
   }
-  .markdown pre { background: var(--panel); padding: 12px 16px; border-radius: 6px; overflow: auto; }
-  .markdown pre code { background: none; padding: 0; font-size: 85%; }
+  .markdown pre { background: var(--panel); padding: 12px 16px; border-radius: 6px; overflow: auto; line-height: 1.45; }
+  .markdown pre code { background: none; padding: 0; font-size: 85%; display: block; }
   .markdown blockquote { margin: 0; padding: 0 1em; color: var(--muted); border-left: 4px solid var(--border); }
   .markdown table { border-collapse: collapse; display: block; overflow: auto; }
   .markdown th, .markdown td { border: 1px solid var(--border); padding: 6px 13px; }
@@ -140,391 +57,134 @@
   .markdown img { max-width: 100%; }
   .markdown hr { border: 0; border-top: 1px solid var(--border); margin: 24px 0; }
   .markdown li > input[type="checkbox"] { margin-right: 0.4em; }
+  .markdown .math-block { overflow-x: auto; margin: 1em 0; text-align: center; }
+  .markdown .mermaid-diagram { margin: 1em 0; text-align: center; overflow-x: auto; }
+  .markdown .mermaid-diagram svg { max-width: 100%; height: auto; }
+  .markdown .render-error { color: #cf222e; font-size: 13px; white-space: pre-wrap; }
 
-  @media (max-width: 700px) {
-    /* Stacked layout: no dragging; collapsing shrinks a pane to its title bar. */
-    main { flex-direction: column; }
-    #left-pane { flex: 1 1 0; }
-    #divider { display: none; }
-    .pane + .pane { border-top: 1px solid var(--border); }
-    .pane.collapsed { flex: 0 0 auto !important; }
-    .pane.collapsed .pane-bar { flex-direction: row; padding: 4px 8px 4px 16px; }
-    .pane.collapsed .pane-bar span { order: 0; margin: 0 auto 0 0; writing-mode: horizontal-tb; }
-    .pane-bar button.toggle { transform: rotate(90deg); }
-  }
+  /* Syntax highlighting colours, adapted from highlight.js "GitHub" and "GitHub Dark" themes
+     (BSD-3-Clause, https://github.com/highlightjs/highlight.js). */
+  .hljs-doctag, .hljs-keyword, .hljs-meta .hljs-keyword, .hljs-template-tag, .hljs-template-variable, .hljs-type, .hljs-variable.language_ { color: #d73a49; }
+  .hljs-title, .hljs-title.class_, .hljs-title.class_.inherited__, .hljs-title.function_ { color: #6f42c1; }
+  .hljs-attr, .hljs-attribute, .hljs-literal, .hljs-meta, .hljs-number, .hljs-operator, .hljs-selector-attr, .hljs-selector-class, .hljs-selector-id, .hljs-variable { color: #005cc5; }
+  .hljs-meta .hljs-string, .hljs-regexp, .hljs-string { color: #032f62; }
+  .hljs-built_in, .hljs-symbol { color: #e36209; }
+  .hljs-code, .hljs-comment, .hljs-formula { color: #6a737d; }
+  .hljs-name, .hljs-quote, .hljs-selector-pseudo, .hljs-selector-tag { color: #22863a; }
+  .hljs-section { color: #005cc5; font-weight: 700; }
+  .hljs-bullet { color: #735c0f; }
+  .hljs-emphasis { font-style: italic; }
+  .hljs-strong { font-weight: 700; }
+  .hljs-addition { color: #22863a; background-color: #f0fff4; }
+  .hljs-deletion { color: #b31d28; background-color: #ffeef0; }
+  [data-theme="dark"] .hljs-doctag, [data-theme="dark"] .hljs-keyword, [data-theme="dark"] .hljs-meta .hljs-keyword, [data-theme="dark"] .hljs-template-tag, [data-theme="dark"] .hljs-template-variable, [data-theme="dark"] .hljs-type, [data-theme="dark"] .hljs-variable.language_ { color: #ff7b72; }
+  [data-theme="dark"] .hljs-title, [data-theme="dark"] .hljs-title.class_, [data-theme="dark"] .hljs-title.class_.inherited__, [data-theme="dark"] .hljs-title.function_ { color: #d2a8ff; }
+  [data-theme="dark"] .hljs-attr, [data-theme="dark"] .hljs-attribute, [data-theme="dark"] .hljs-literal, [data-theme="dark"] .hljs-meta, [data-theme="dark"] .hljs-number, [data-theme="dark"] .hljs-operator, [data-theme="dark"] .hljs-selector-attr, [data-theme="dark"] .hljs-selector-class, [data-theme="dark"] .hljs-selector-id, [data-theme="dark"] .hljs-variable { color: #79c0ff; }
+  [data-theme="dark"] .hljs-meta .hljs-string, [data-theme="dark"] .hljs-regexp, [data-theme="dark"] .hljs-string { color: #a5d6ff; }
+  [data-theme="dark"] .hljs-built_in, [data-theme="dark"] .hljs-symbol { color: #ffa657; }
+  [data-theme="dark"] .hljs-code, [data-theme="dark"] .hljs-comment, [data-theme="dark"] .hljs-formula { color: #8b949e; }
+  [data-theme="dark"] .hljs-name, [data-theme="dark"] .hljs-quote, [data-theme="dark"] .hljs-selector-pseudo, [data-theme="dark"] .hljs-selector-tag { color: #7ee787; }
+  [data-theme="dark"] .hljs-section { color: #1f6feb; }
+  [data-theme="dark"] .hljs-bullet { color: #f2cc60; }
+  [data-theme="dark"] .hljs-addition { color: #aff5b4; background-color: #033a16; }
+  [data-theme="dark"] .hljs-deletion { color: #ffdcd7; background-color: #67060c; }
 </style>
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
 <header>
   <a class="home" href="../index.html" title="All tools">← Tools</a>
   <h1>Markdown Viewer</h1>
-  <button id="open" title="Open a Markdown file from your computer">Open file…</button>
-  <span id="file-chip" hidden title="The left pane shows this file. Close it to go back to your own scratch text.">
-    <span id="file-name"></span>
-    <button id="close-file">Close file</button>
-  </span>
-  <button id="reload" disabled title="Re-read the opened file from disk">Reload</button>
-  <label class="watch" id="watch-label" hidden title="Re-read the file whenever it changes on disk">
-    <input type="checkbox" id="watch"> Watch
-  </label>
-  <input type="file" id="file-input" accept=".md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain" hidden>
-  <span id="status">Type or paste Markdown, open a file, or drop one on the left pane.</span>
+  <div class="group">
+    <button id="open" title="Open Markdown files (⌘O / Ctrl+O)">Open file…</button>
+    <button id="open-folder" hidden title="Browse a folder's Markdown files in a sidebar">Open folder…</button>
+    <button id="save" title="Save (⌘S / Ctrl+S)">Save</button>
+    <button id="save-as" title="Save to a new file (⇧⌘S / Shift+Ctrl+S)">Save as…</button>
+  </div>
+  <div class="group" id="file-tools" hidden>
+    <button id="reload" title="Re-read this file from disk">Reload</button>
+    <label class="check" id="watch-label" title="Reload this file whenever it changes on disk">
+      <input type="checkbox" id="watch"> Watch
+    </label>
+  </div>
+  <input type="file" id="file-input" multiple accept=".md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain" hidden>
+  <span id="status"></span>
+  <details class="menu" id="export-menu">
+    <summary>Export</summary>
+    <div class="menu-items">
+      <button id="export-html">Download as HTML</button>
+      <button id="print">Print / Save as PDF</button>
+      <button id="download-md">Download Markdown (.md)</button>
+    </div>
+  </details>
+  <button id="theme" title="Colour theme"></button>
 </header>
+
+<nav id="tabs" aria-label="Open documents">
+  <div id="tab-list" role="tablist"></div>
+  <button id="new-tab" title="New scratch document">+</button>
+</nav>
+
 <main id="main">
-  <section class="pane" id="left-pane">
+  <aside id="files" hidden>
     <div class="pane-bar">
-      <span>Markdown</span>
-      <button id="copy-source" title="Copy the Markdown text">Copy</button>
-      <button id="paste-source" title="Paste from the clipboard at the cursor">Paste</button>
-      <button id="clear-source" title="Empty the pane to start fresh (closes an open file; ⌘Z / Ctrl+Z undoes)">Clear</button>
-      <button class="toggle" id="toggle-left" title="Collapse the Markdown pane" aria-expanded="true">«</button>
+      <span class="pane-title" id="folder-name">Folder</span>
+      <button id="refresh-folder" title="Rescan the folder">↻</button>
+      <button id="close-folder" title="Close the folder sidebar">×</button>
     </div>
-    <textarea id="source" spellcheck="false" placeholder="# Type Markdown here"></textarea>
-  </section>
-  <div id="divider" role="separator" aria-orientation="vertical" aria-label="Resize panes" tabindex="0"
-       title="Drag to resize · double-click to reset · arrow keys to nudge"></div>
-  <section class="pane" id="right-pane">
-    <div class="pane-bar">
-      <span>Preview</span>
-      <button id="copy-preview" title="Copy the rendered output, with formatting, for email, docs, etc.">Copy</button>
-      <button class="toggle" id="toggle-right" title="Collapse the Preview pane" aria-expanded="true">»</button>
-    </div>
-    <article id="preview" class="markdown"></article>
-  </section>
+    <div id="file-tree"></div>
+  </aside>
+
+  <div id="split">
+    <section class="pane" id="left-pane">
+      <div class="pane-bar">
+        <span class="pane-title"><b>Markdown</b><span class="pane-meta" id="counts"></span></span>
+        <button id="copy-source" title="Copy the Markdown text">Copy</button>
+        <button id="paste-source" title="Paste from the clipboard at the cursor">Paste</button>
+        <button id="clear-source" title="Start fresh: empties a scratch document (⌘Z / Ctrl+Z undoes), or opens a new empty scratch tab when a file is shown">Clear</button>
+        <button class="toggle" id="toggle-left" aria-expanded="true">«</button>
+      </div>
+      <div id="format-bar" role="toolbar" aria-label="Formatting">
+        <button data-fmt="bold" title="Bold (⌘B / Ctrl+B)"><b>B</b></button>
+        <button data-fmt="italic" title="Italic (⌘I / Ctrl+I)"><i>I</i></button>
+        <button data-fmt="strike" title="Strikethrough (⇧⌘X / Shift+Ctrl+X)"><s>S</s></button>
+        <button data-fmt="heading" title="Heading: cycles # / ## / ### / none (⇧⌘H / Shift+Ctrl+H)">H</button>
+        <span class="sep"></span>
+        <button data-fmt="link" title="Link (⌘K / Ctrl+K)">Link</button>
+        <button data-fmt="code" title="Inline code (⌘E / Ctrl+E)">`code`</button>
+        <button data-fmt="codeblock" title="Code block">{ }</button>
+        <span class="sep"></span>
+        <button data-fmt="ul" title="Bulleted list">•</button>
+        <button data-fmt="ol" title="Numbered list">1.</button>
+        <button data-fmt="task" title="Task list">☐</button>
+        <button data-fmt="quote" title="Quote">❝</button>
+        <span class="sep"></span>
+        <button data-fmt="table" title="Insert a table">Table</button>
+        <button data-fmt="hr" title="Horizontal rule">―</button>
+      </div>
+      <textarea id="source" spellcheck="false" placeholder="# Type or paste Markdown here"></textarea>
+    </section>
+    <div id="divider" role="separator" aria-orientation="vertical" aria-label="Resize panes" tabindex="0"
+         title="Drag to resize · double-click to reset · arrow keys to nudge"></div>
+    <section class="pane" id="right-pane">
+      <div class="pane-bar">
+        <span class="pane-title"><b>Preview</b></span>
+        <label class="check" title="Keep the preview scrolled to the same place as the Markdown"><input type="checkbox" id="sync-scroll"> Sync scroll</label>
+        <button id="outline-toggle" aria-pressed="false" title="Show the list of headings">Outline</button>
+        <button id="copy-preview" title="Copy the rendered output, with formatting, for email, docs, etc.">Copy</button>
+        <button class="toggle" id="toggle-right" aria-expanded="true">»</button>
+      </div>
+      <div class="preview-wrap">
+        <article id="preview" class="markdown"></article>
+        <nav id="outline" hidden aria-label="Outline"></nav>
+      </div>
+    </section>
+  </div>
 </main>
 
-<script src="vendor/marked.umd.js"></script>
-<script src="vendor/purify.min.js"></script>
-<script>
-  const source = document.getElementById('source');
-  const preview = document.getElementById('preview');
-  const status = document.getElementById('status');
-  const openBtn = document.getElementById('open');
-  const reloadBtn = document.getElementById('reload');
-  const watchLabel = document.getElementById('watch-label');
-  const watchBox = document.getElementById('watch');
-  const fileInput = document.getElementById('file-input');
-  const main = document.getElementById('main');
-  const fileChip = document.getElementById('file-chip');
-  const fileNameEl = document.getElementById('file-name');
-
-  const DRAFT_KEY = 'markdown-viewer:draft';
-  // The File System Access API (Chromium browsers) keeps a handle to the file, so it can be
-  // re-read later; elsewhere we fall back to a plain file input, which is a one-time snapshot.
-  const hasFsAccess = 'showOpenFilePicker' in window;
-
-  // Two modes: scratch (fileName is null; text is kept in localStorage) and file (a file was opened).
-  // The scratch draft is never overwritten while a file is open, so closing the file restores it.
-  let fileName = null;
-  let fileHandle = null; // only for files opened through the File System Access API
-  let fileEdited = false;
-  let lastModified = 0;
-  let watchTimer = null;
-
-  marked.setOptions({ gfm: true, breaks: false });
-
-  function render() {
-    // Markdown may contain raw HTML, so sanitize before inserting it into the page.
-    preview.innerHTML = DOMPurify.sanitize(marked.parse(source.value));
-    for (const a of preview.querySelectorAll('a[href]')) {
-      if (!a.getAttribute('href').startsWith('#')) {
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-      }
-    }
-  }
-
-  let renderQueued = false;
-  source.addEventListener('input', () => {
-    if (!fileName) {
-      localStorage.setItem(DRAFT_KEY, source.value);
-    } else if (!fileEdited) {
-      // Edits to an opened file are a local copy; stop watching so they aren't overwritten.
-      fileEdited = true;
-      stopWatching();
-      setStatus(`${fileName} · edited here, not saved to the file${fileHandle ? ' (Reload discards edits)' : ''}`);
-    }
-    if (renderQueued) return;
-    renderQueued = true;
-    requestAnimationFrame(() => { renderQueued = false; render(); });
-  });
-
-  // Let Tab insert indentation instead of moving focus.
-  source.addEventListener('keydown', (e) => {
-    if (e.key !== 'Tab' || e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
-    e.preventDefault();
-    document.execCommand('insertText', false, '    ');
-  });
-
-  function setStatus(text) {
-    status.textContent = text;
-    status.title = text;
-  }
-
-  async function readHandle() {
-    const file = await fileHandle.getFile();
-    lastModified = file.lastModified;
-    fileEdited = false;
-    source.value = await file.text();
-    render();
-    setStatus(`${file.name} · loaded ${new Date().toLocaleTimeString()}`);
-  }
-
-  function stopWatching() {
-    clearInterval(watchTimer);
-    watchTimer = null;
-    watchBox.checked = false;
-  }
-
-  function enterFileMode(name, handle) {
-    stopWatching();
-    fileName = name;
-    fileHandle = handle;
-    fileEdited = false;
-    fileNameEl.textContent = name;
-    fileChip.hidden = false;
-    reloadBtn.disabled = !handle;
-    watchLabel.hidden = !handle;
-  }
-
-  function closeFile() {
-    stopWatching();
-    fileName = null;
-    fileHandle = null;
-    fileChip.hidden = true;
-    reloadBtn.disabled = true;
-    watchLabel.hidden = true;
-    source.value = localStorage.getItem(DRAFT_KEY) ?? '';
-    render();
-    setStatus('Scratch: type or paste Markdown. It is kept in this browser.');
-  }
-
-  async function useHandle(handle) {
-    const file = await handle.getFile();
-    enterFileMode(file.name, handle);
-    await readHandle();
-  }
-
-  async function useSnapshot(file) {
-    const text = await file.text();
-    enterFileMode(file.name, null);
-    source.value = text;
-    render();
-    setStatus(`${file.name} · edits here are not saved to the file`);
-  }
-
-  document.getElementById('close-file').addEventListener('click', () => {
-    closeFile();
-    source.focus();
-  });
-
-  // Clear goes back to scratch mode if a file is open, then empties the pane in an undoable way.
-  document.getElementById('clear-source').addEventListener('click', () => {
-    if (fileName) closeFile();
-    source.focus();
-    source.select();
-    document.execCommand('delete');
-    setStatus('Cleared. Type or paste Markdown (⌘Z / Ctrl+Z to undo).');
-  });
-
-  openBtn.addEventListener('click', async () => {
-    if (!hasFsAccess) { fileInput.click(); return; }
-    try {
-      const [handle] = await window.showOpenFilePicker({
-        types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md', '.markdown', '.mdown', '.mkd'], 'text/plain': ['.txt'] } }],
-      });
-      await useHandle(handle);
-    } catch (err) {
-      if (err.name !== 'AbortError') setStatus(`Could not open file: ${err.message}`);
-    }
-  });
-
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files[0]) useSnapshot(fileInput.files[0]);
-    fileInput.value = '';
-  });
-
-  reloadBtn.addEventListener('click', () => {
-    readHandle().catch((err) => setStatus(`Could not reload: ${err.message}`));
-  });
-
-  watchBox.addEventListener('change', () => {
-    if (!watchBox.checked) { stopWatching(); return; }
-    watchTimer = setInterval(async () => {
-      try {
-        const file = await fileHandle.getFile();
-        if (file.lastModified !== lastModified) await readHandle();
-      } catch (err) {
-        stopWatching();
-        setStatus(`Stopped watching: ${err.message}`);
-      }
-    }, 1000);
-  });
-
-  // Copy / paste buttons. The button label briefly confirms the result.
-  function flash(button, text) {
-    clearTimeout(button.flashTimer);
-    button.dataset.label ??= button.textContent;
-    button.textContent = text;
-    button.flashTimer = setTimeout(() => { button.textContent = button.dataset.label; }, 1500);
-  }
-
-  document.getElementById('copy-source').addEventListener('click', async (e) => {
-    const button = e.currentTarget; // currentTarget is cleared once the handler awaits
-    try {
-      await navigator.clipboard.writeText(source.value);
-      flash(button, 'Copied');
-    } catch (err) {
-      flash(button, 'Failed');
-      setStatus(`Could not copy: ${err.message}`);
-    }
-  });
-
-  document.getElementById('paste-source').addEventListener('click', async (e) => {
-    const button = e.currentTarget;
-    try {
-      const text = await navigator.clipboard.readText();
-      source.focus();
-      // insertText keeps the browser's undo history and fires 'input', which re-renders.
-      document.execCommand('insertText', false, text);
-      flash(button, 'Pasted');
-    } catch (err) {
-      flash(button, 'Blocked');
-      setStatus('The browser blocked clipboard access. Click in the left pane and press ⌘V / Ctrl+V instead.');
-    }
-  });
-
-  // Copy the preview as rich text (HTML) so formatting survives a paste into email or a document,
-  // with a plain-text version for apps that only accept text.
-  document.getElementById('copy-preview').addEventListener('click', async (e) => {
-    const button = e.currentTarget;
-    const html = preview.innerHTML;
-    const text = preview.innerText;
-    try {
-      await navigator.clipboard.write([new ClipboardItem({
-        'text/html': new Blob([html], { type: 'text/html' }),
-        'text/plain': new Blob([text], { type: 'text/plain' }),
-      })]);
-      flash(button, 'Copied');
-    } catch (err) {
-      flash(button, 'Failed');
-      setStatus(`Could not copy: ${err.message}`);
-    }
-  });
-
-  // Resizable split and collapsible panes. The layout is remembered between visits.
-  const LAYOUT_KEY = 'markdown-viewer:layout';
-  const MIN_PANE_PX = 160;
-  const divider = document.getElementById('divider');
-  const panes = {
-    left: { el: document.getElementById('left-pane'), toggle: document.getElementById('toggle-left'), name: 'Markdown', collapseIcon: '«', expandIcon: '»' },
-    right: { el: document.getElementById('right-pane'), toggle: document.getElementById('toggle-right'), name: 'Preview', collapseIcon: '»', expandIcon: '«' },
-  };
-  let layout = { split: 50, collapsed: null };
-  try { Object.assign(layout, JSON.parse(localStorage.getItem(LAYOUT_KEY))); } catch {}
-
-  function applyLayout() {
-    main.style.setProperty('--split', `${layout.split}%`);
-    main.classList.toggle('left-collapsed', layout.collapsed === 'left');
-    main.classList.toggle('right-collapsed', layout.collapsed === 'right');
-    for (const [side, p] of Object.entries(panes)) {
-      const collapsed = layout.collapsed === side;
-      p.el.classList.toggle('collapsed', collapsed);
-      p.toggle.textContent = collapsed ? p.expandIcon : p.collapseIcon;
-      p.toggle.title = `${collapsed ? 'Expand' : 'Collapse'} the ${p.name} pane`;
-      p.toggle.setAttribute('aria-expanded', String(!collapsed));
-    }
-    divider.setAttribute('aria-valuenow', String(Math.round(layout.split)));
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
-  }
-
-  // Collapsing one pane while the other is collapsed swaps them, so one pane is always visible.
-  function toggleSide(side) {
-    layout.collapsed = layout.collapsed === side ? null : side;
-    applyLayout();
-  }
-  for (const [side, p] of Object.entries(panes)) {
-    p.toggle.addEventListener('click', (e) => { e.stopPropagation(); toggleSide(side); });
-    // When collapsed, the whole strip is a click target to expand.
-    p.el.querySelector('.pane-bar').addEventListener('click', () => {
-      if (layout.collapsed === side) toggleSide(side);
-    });
-  }
-
-  function setSplitFromX(clientX) {
-    const rect = main.getBoundingClientRect();
-    const min = Math.min(MIN_PANE_PX, rect.width / 2);
-    const x = Math.max(min, Math.min(rect.width - min, clientX - rect.left));
-    layout.split = (x / rect.width) * 100;
-    applyLayout();
-  }
-
-  divider.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    divider.setPointerCapture(e.pointerId);
-    main.classList.add('resizing');
-  });
-  divider.addEventListener('pointermove', (e) => {
-    if (divider.hasPointerCapture(e.pointerId)) setSplitFromX(e.clientX);
-  });
-  const endResize = (e) => {
-    if (divider.hasPointerCapture(e.pointerId)) divider.releasePointerCapture(e.pointerId);
-    main.classList.remove('resizing');
-  };
-  divider.addEventListener('pointerup', endResize);
-  divider.addEventListener('pointercancel', endResize);
-  divider.addEventListener('dblclick', () => { layout.split = 50; applyLayout(); });
-  divider.addEventListener('keydown', (e) => {
-    const step = e.shiftKey ? 10 : 2;
-    if (e.key === 'ArrowLeft') layout.split = Math.max(10, layout.split - step);
-    else if (e.key === 'ArrowRight') layout.split = Math.min(90, layout.split + step);
-    else return;
-    e.preventDefault();
-    applyLayout();
-  });
-
-  applyLayout();
-
-  // Drag and drop a file onto either pane.
-  main.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    main.classList.add('dragging');
-  });
-  main.addEventListener('dragleave', (e) => {
-    if (!main.contains(e.relatedTarget)) main.classList.remove('dragging');
-  });
-  main.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    main.classList.remove('dragging');
-    const item = e.dataTransfer.items && e.dataTransfer.items[0];
-    if (item && item.getAsFileSystemHandle) {
-      const handle = await item.getAsFileSystemHandle();
-      if (handle && handle.kind === 'file') { await useHandle(handle); return; }
-    }
-    const file = e.dataTransfer.files[0];
-    if (file) useSnapshot(file);
-  });
-
-  source.value = localStorage.getItem(DRAFT_KEY) ?? [
-    '# Markdown Viewer',
-    '',
-    'Type on the left and the preview updates as you go. **Bold**, *italic*, `code`, and [links](https://commonmark.org) all work.',
-    '',
-    '- [x] GitHub-flavored task lists',
-    '- [ ] Tables, fenced code, strikethrough',
-    '',
-    '| Feature | Supported |',
-    '| ------- | --------- |',
-    '| Tables  | Yes       |',
-    '',
-    '```js',
-    'console.log("hello");',
-    '```',
-    '',
-    '> Use **Open file…** or drop a `.md` file here to load it.',
-  ].join('\n');
-  render();
-</script>
+<script src="vendor/marked/marked.umd.js"></script>
+<script src="vendor/dompurify/purify.min.js"></script>
+<script src="vendor/highlight/highlight.min.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

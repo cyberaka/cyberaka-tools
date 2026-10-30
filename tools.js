@@ -7,6 +7,6 @@ window.TOOLS = [
   {
     name: 'Markdown Viewer',
     path: 'markdown-viewer/index.html',
-    description: 'Type or paste Markdown on the left and see it rendered on the right. Open or drop a .md file, with optional live reload when it changes on disk.',
+    description: 'Live Markdown editor and preview: tabs, open/save files and folders, synced scrolling, code highlighting, diagrams and math, outline, and export to HTML or PDF.',
   },
 ];
