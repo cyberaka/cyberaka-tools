@@ -18,8 +18,12 @@ const fileInput = $('file-input');
 const exportMenu = $('export-menu');
 
 const STORE = {
-  docs: 'markdown-viewer:docs',
-  legacyDraft: 'markdown-viewer:draft', // single-draft format used before tabs existed
+  notes: 'markdown-viewer:notes', // ordered list of scratch note ids
+  notePrefix: 'markdown-viewer:note:', // + id: the text of one scratch note
+  lastActive: 'markdown-viewer:last-active', // tab to show when a new window opens
+  active: 'markdown-viewer:active', // (sessionStorage) the tab this window is showing
+  oldDocs: 'markdown-viewer:docs', // earlier format: all notes in one value
+  oldDraft: 'markdown-viewer:draft', // earliest format: a single draft
   layout: 'markdown-viewer:layout',
   theme: 'markdown-viewer:theme',
   prefs: 'markdown-viewer:prefs',
@@ -479,28 +483,118 @@ function fileBase(d) {
   return docTitle(d).replace(/…$/, '').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'untitled';
 }
 
-function persistDocs() {
-  const scratch = docs.filter((d) => d.kind === 'scratch').map((d) => ({ id: d.id, text: d.text }));
-  localStorage.setItem(STORE.docs, JSON.stringify({ active: activeId, docs: scratch }));
-  localStorage.removeItem(STORE.legacyDraft);
-}
-let persistTimer = null;
-function persistSoon() {
-  clearTimeout(persistTimer);
-  persistTimer = setTimeout(persistDocs, 300);
-}
-window.addEventListener('pagehide', persistDocs);
-
-function loadDocs() {
-  const saved = readJson(STORE.docs);
-  if (saved && Array.isArray(saved.docs) && saved.docs.length) {
-    docs = saved.docs.map((d) => makeDoc({ id: d.id, kind: 'scratch', text: d.text }));
-    activeId = docs.some((d) => d.id === saved.active) ? saved.active : docs[0].id;
-  } else {
-    docs = [makeDoc({ kind: 'scratch', text: localStorage.getItem(STORE.legacyDraft) ?? SAMPLE })];
-    activeId = docs[0].id;
+// Scratch notes are stored one per key, plus an ordered list of ids. Each window writes only the
+// note being edited, so two windows can never overwrite each other's notes, and the 'storage'
+// event keeps every open window in sync (see syncFromOtherWindow below).
+function storageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err) {
+    setStatus(`Could not keep this note in the browser (${err.name}). Save it as a file to keep it safe.`, true);
+    return false;
   }
 }
+function readNoteIds() {
+  const ids = readJson(STORE.notes);
+  return Array.isArray(ids) ? ids : [];
+}
+function saveNote(d) { storageSet(STORE.notePrefix + d.id, d.text); }
+function addNote(d, afterId) {
+  saveNote(d);
+  const ids = readNoteIds().filter((id) => id !== d.id);
+  const at = afterId ? ids.indexOf(afterId) : -1;
+  ids.splice(at < 0 ? ids.length : at + 1, 0, d.id);
+  storageSet(STORE.notes, JSON.stringify(ids));
+}
+function removeNote(id) {
+  localStorage.removeItem(STORE.notePrefix + id);
+  storageSet(STORE.notes, JSON.stringify(readNoteIds().filter((x) => x !== id)));
+}
+function rememberActive() {
+  sessionStorage.setItem(STORE.active, activeId);
+  if (activeDoc()?.kind === 'scratch') storageSet(STORE.lastActive, activeId);
+}
+
+// Convert notes saved by earlier versions of the viewer to one-key-per-note.
+function migrateStorage() {
+  if (localStorage.getItem(STORE.notes) !== null) return;
+  const old = readJson(STORE.oldDocs);
+  const draft = localStorage.getItem(STORE.oldDraft);
+  const notes = old && Array.isArray(old.docs) ? old.docs : draft !== null ? [{ id: 'd-draft', text: draft }] : [];
+  if (!notes.length) return;
+  for (const n of notes) storageSet(STORE.notePrefix + n.id, n.text);
+  if (storageSet(STORE.notes, JSON.stringify(notes.map((n) => n.id)))) {
+    if (old?.active) storageSet(STORE.lastActive, old.active);
+    localStorage.removeItem(STORE.oldDocs);
+    localStorage.removeItem(STORE.oldDraft);
+  }
+}
+
+function loadDocs() {
+  migrateStorage();
+  docs = readNoteIds()
+    .map((id) => ({ id, text: localStorage.getItem(STORE.notePrefix + id) }))
+    .filter((n) => n.text !== null)
+    .map((n) => makeDoc({ id: n.id, kind: 'scratch', text: n.text }));
+  if (!docs.length) {
+    docs = [makeDoc({ kind: 'scratch', text: SAMPLE })];
+    addNote(docs[0]);
+  }
+  const wanted = sessionStorage.getItem(STORE.active) || localStorage.getItem(STORE.lastActive);
+  activeId = docs.some((d) => d.id === wanted) ? wanted : docs[0].id;
+}
+
+// Another window changed a note, or added / closed one: apply it here.
+function syncFromOtherWindow(e) {
+  if (e.storageArea !== localStorage) return;
+  if (e.key === STORE.notes) {
+    const ids = readNoteIds();
+    let changed = false;
+    for (const id of ids) {
+      const text = localStorage.getItem(STORE.notePrefix + id);
+      if (text !== null && !docs.some((d) => d.id === id)) {
+        docs.push(makeDoc({ id, kind: 'scratch', text }));
+        changed = true;
+      }
+    }
+    const gone = docs.filter((d) => d.kind === 'scratch' && !ids.includes(d.id));
+    if (gone.length) {
+      const index = docs.findIndex((d) => d.id === activeId);
+      const activeGone = gone.some((d) => d.id === activeId);
+      docs = docs.filter((d) => !gone.includes(d));
+      if (!docs.length) {
+        docs.push(makeDoc({ kind: 'scratch' }));
+        addNote(docs[0]);
+      }
+      if (activeGone) {
+        activeId = null;
+        switchTo(docs[Math.min(index, docs.length - 1)].id);
+        setStatus('That note was closed in another window.');
+        return;
+      }
+      changed = true;
+    }
+    if (changed) renderTabs();
+  } else if (e.key && e.key.startsWith(STORE.notePrefix) && e.newValue !== null) {
+    const d = docs.find((x) => x.kind === 'scratch' && x.id === e.key.slice(STORE.notePrefix.length));
+    if (!d || d.text === e.newValue) return;
+    d.text = e.newValue;
+    if (d.id === activeId) {
+      const [start, end, top] = [source.selectionStart, source.selectionEnd, source.scrollTop];
+      source.value = d.text;
+      source.setSelectionRange(Math.min(start, d.text.length), Math.min(end, d.text.length));
+      source.scrollTop = top;
+      scheduleRender();
+    }
+    const tab = tabList.querySelector(`[data-id="${d.id}"]`);
+    if (tab) updateTab(tab, d);
+  } else if (e.key === STORE.theme) {
+    themePref = e.newValue || 'auto';
+    applyTheme();
+  }
+}
+window.addEventListener('storage', syncFromOtherWindow);
 
 function renderTabs() {
   tabList.replaceChildren(...docs.map((d) => {
@@ -574,7 +668,7 @@ function switchTo(id) {
   updateFileTools();
   updateDocStatus(d);
   highlightFileTree();
-  persistSoon();
+  rememberActive();
 }
 
 // New documents go after the current tab; an untouched empty scratch tab is replaced instead.
@@ -583,6 +677,7 @@ function addDoc(d) {
   const index = docs.indexOf(current);
   if (current && current.kind === 'scratch' && !current.text.trim()) {
     docs.splice(index, 1, d);
+    removeNote(current.id);
     activeId = null;
   } else {
     docs.splice(index + 1, 0, d);
@@ -594,6 +689,7 @@ function newScratch(text = '') {
   const d = makeDoc({ kind: 'scratch', text });
   const index = docs.indexOf(activeDoc());
   docs.splice(index + 1, 0, d);
+  addNote(d, activeId);
   switchTo(d.id);
   source.focus();
   return d;
@@ -606,13 +702,16 @@ function closeDoc(id) {
   if (d.kind === 'scratch' && d.text.trim() && !confirm(`Delete the scratch document "${docTitle(d)}"? This can't be undone.`)) return;
   const index = docs.indexOf(d);
   docs.splice(index, 1);
-  if (!docs.length) docs.push(makeDoc({ kind: 'scratch' }));
+  if (d.kind === 'scratch') removeNote(d.id);
+  if (!docs.length) {
+    docs.push(makeDoc({ kind: 'scratch' }));
+    addNote(docs[0]);
+  }
   if (id === activeId) {
     activeId = null;
     switchTo(docs[Math.min(index, docs.length - 1)].id);
   } else {
     renderTabs();
-    persistSoon();
   }
 }
 
@@ -622,7 +721,7 @@ source.addEventListener('input', () => {
   const d = activeDoc();
   const wasDirty = isDirty(d);
   d.text = source.value;
-  if (d.kind === 'scratch') persistSoon();
+  if (d.kind === 'scratch') saveNote(d);
   updateActiveTab();
   if (isDirty(d) !== wasDirty) updateDocStatus(d);
   scheduleRender();
@@ -764,7 +863,7 @@ async function writeDoc(d, handle) {
     const file = await handle.getFile();
     const wasScratch = d.kind === 'scratch';
     Object.assign(d, { kind: 'file', handle, name: file.name, savedText: text, lastModified: file.lastModified, diskChanged: false });
-    if (wasScratch) persistDocs(); // it is a file now, so drop it from the scratch store
+    if (wasScratch) removeNote(d.id); // it is a file now, so drop it from the scratch notes
     renderTabs();
     updateFileTools();
     highlightFileTree();
