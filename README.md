@@ -20,3 +20,9 @@ Open `index.html` in a browser to see every tool and launch one. To add a tool, 
   - Verifies HS256/384/512, RS256/384/512, PS256/384/512, ES256/384/512 and EdDSA (Ed25519) with a secret, PEM public key, certificate, JWK or JWKS (picked by `kid`).
   - Signs new tokens with a secret or private key (PEM or JWK), and can generate secrets and key pairs, showing the public key as PEM, JWK or JWKS.
   - No third-party libraries.
+
+## Command-line tools
+
+These run on your computer rather than in the browser, so they are not on the `index.html` list.
+
+- [git-folder-server](git-folder-server/README.md): serves a folder from a GitHub repo (HTML, CSS, JS and images; private repos too) at http://127.0.0.1:8080, pulling the latest commit whenever you load or refresh a page. Node.js 18+ and git, no dependencies: `node git-folder-server/serve.mjs https://github.com/OWNER/REPO/tree/main/folder`.
