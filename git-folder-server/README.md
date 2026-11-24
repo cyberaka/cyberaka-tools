@@ -30,7 +30,7 @@ Options:
 | `--branch NAME` | Branch or tag to serve. Use it for branch names that contain a slash (`feature/x`). |
 | `--folder PATH` | Folder inside the repo to serve. |
 | `--port N` | Port to listen on (default 8080; `0` picks a free one). |
-| `--host ADDR` | Address to listen on (default `127.0.0.1`, this computer only). |
+| `--host ADDR` | Address to listen on (default `127.0.0.1`, this computer only; `0.0.0.0` lets other devices on your network open the pages, see [Classroom use](#classroom-use)). |
 | `--cache DIR` | Where to keep the checkout (default: a folder in your temp directory). |
 | `--check-every S` | While a page is open, check GitHub for new commits every S seconds (default 30, minimum 5). |
 | `--no-notify` | Don't add the "newer version" notice to pages; serve the HTML exactly as committed. |
@@ -60,6 +60,33 @@ You don't have to keep refreshing to find out whether something changed. While a
 Click **Refresh** to load the new version, or **×** to hide the card until the next push. The check uses `git ls-remote`, which only asks GitHub for the latest commit ID and downloads nothing; however many tabs are open, the server makes at most one check per interval. The terminal also logs `GitHub has a newer commit …` when it first notices one.
 
 To do this, the server adds a small script to every HTML page it serves. The script and its card are kept apart from the page (in a shadow root), so the page's own CSS and JavaScript are unaffected. Use `--no-notify` to serve pages exactly as committed.
+
+## Classroom use
+
+A teacher can run the server on their own laptop and have the class open the pages from theirs. The teacher pushes new material to GitHub; each student sees the **A newer version is on GitHub** card and refreshes when they are ready, so no one loses their place in the middle of reading.
+
+1. On the teacher's laptop, start the server so other devices can reach it:
+
+   ```sh
+   node serve.mjs https://github.com/OWNER/REPO/tree/main/lesson --host 0.0.0.0
+   ```
+
+   It prints the addresses to share, for example:
+
+   ```
+   Other devices on the same network can open:
+     http://192.168.1.20:8080/
+   ```
+
+2. Students on the same Wi-Fi open that address. Nothing needs to be installed on their machines, and they don't need GitHub accounts.
+3. Push changes as the lesson goes on. Open pages show the notice within 30 seconds (`--check-every 10` for quicker), and a refresh shows the new version.
+
+Before the class:
+
+- **Anyone on the network can read the pages, without a login.** With a private repo, serve only the folder meant for the class.
+- **Try it on the classroom network first.** Many school and guest Wi-Fi networks stop devices from reaching each other; if students can't open the address, that is the usual cause. A firewall prompt on the teacher's laptop asking to allow incoming connections for Node must be accepted.
+- **The address can change** when the laptop reconnects to Wi-Fi; the server prints it each time it starts.
+- **It scales to a class.** All open pages share one check of GitHub per interval, and refreshes that arrive together share one pull.
 
 ## Private repos
 

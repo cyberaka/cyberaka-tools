@@ -22,7 +22,8 @@ Options:
   --branch NAME    branch or tag to serve (default: the location's, else the repo default)
   --folder PATH    folder inside the repo to serve (default: the location's, else the repo root)
   --port N         port to listen on (default 8080; 0 picks a free one)
-  --host ADDR      address to listen on (default 127.0.0.1, this computer only)
+  --host ADDR      address to listen on (default 127.0.0.1, this computer only;
+                   0.0.0.0 lets other devices on your network open the pages)
   --cache DIR      where to keep the checkout (default: a folder under your temp directory)
   --check-every S  while a page is open, check GitHub for new commits every S seconds (default 30)
   --no-notify      don't add the "newer version available" notice to pages
@@ -416,10 +417,35 @@ server.on('error', (e) => {
   process.exit(1);
 });
 
+// The addresses other devices on the network can use to reach this computer. VPN tunnels and
+// self-assigned (169.254.x.x) addresses are left out, since classmates can't reach those.
+function networkAddresses() {
+  const found = [];
+  for (const [name, addrs] of Object.entries(os.networkInterfaces())) {
+    if (/^(utun|tun|tap|ppp|ipsec|wg|gif|stf|awdl|llw|bridge|docker|veth|vboxnet|vmnet)/i.test(name)) continue;
+    for (const a of addrs || []) {
+      if (a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254.')) found.push(a.address);
+    }
+  }
+  return found;
+}
+
 server.listen(opts.port, opts.host, () => {
   const { port } = server.address();
-  const host = opts.host.includes(':') ? `[${opts.host}]` : opts.host;
   console.log(`Commit ${commit}, checked out in ${checkout}`);
-  console.log(`Open http://${host}:${port}/  (refresh the browser to pull the latest changes)`);
+  if (opts.host === '0.0.0.0' || opts.host === '::') {
+    const addresses = networkAddresses();
+    console.log(`Open http://127.0.0.1:${port}/ on this computer.`);
+    if (addresses.length) {
+      console.log('Other devices on the same network can open:');
+      for (const a of addresses) console.log(`  http://${a}:${port}/`);
+    } else {
+      console.log('This computer has no network address right now, so other devices cannot reach it.');
+    }
+    console.log('Anyone on this network can read these pages, without a login.');
+  } else {
+    const host = opts.host.includes(':') ? `[${opts.host}]` : opts.host;
+    console.log(`Open http://${host}:${port}/  (refresh the browser to pull the latest changes)`);
+  }
   if (opts.notify) console.log(`Open pages check GitHub every ${opts.checkEvery} s and show a notice when a newer commit is pushed.`);
 });
