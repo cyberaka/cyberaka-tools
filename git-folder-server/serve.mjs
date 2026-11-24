@@ -24,6 +24,8 @@ Options:
   --port N         port to listen on (default 8080; 0 picks a free one)
   --host ADDR      address to listen on (default 127.0.0.1, this computer only)
   --cache DIR      where to keep the checkout (default: a folder under your temp directory)
+  --check-every S  while a page is open, check GitHub for new commits every S seconds (default 30)
+  --no-notify      don't add the "newer version available" notice to pages
 
 Private repos: uses GITHUB_TOKEN or GH_TOKEN, else your GitHub CLI login (gh auth login),
 else whatever git credentials or SSH keys you already use for github.com.`;
@@ -31,7 +33,7 @@ else whatever git credentials or SSH keys you already use for github.com.`;
 // ---- Arguments ----
 
 function parseArgs(argv) {
-  const opts = { port: 8080, host: '127.0.0.1' };
+  const opts = { port: 8080, host: '127.0.0.1', checkEvery: 30, notify: true };
   const rest = [];
   const value = (i, name) => {
     if (argv[i] === undefined) fail(`${name} needs a value.`);
@@ -45,6 +47,8 @@ function parseArgs(argv) {
     else if (arg === '--port' || arg === '-p') opts.port = Number(value(++i, arg));
     else if (arg === '--host') opts.host = value(++i, arg);
     else if (arg === '--cache') opts.cache = value(++i, arg);
+    else if (arg === '--check-every') opts.checkEvery = Number(value(++i, arg));
+    else if (arg === '--no-notify') opts.notify = false;
     else if (arg.startsWith('-')) fail(`Unknown option ${arg}.`);
     else rest.push(arg);
   }
@@ -147,8 +151,53 @@ h1{font-size:20px}a{color:#0969da}code{background:#f6f8fa;padding:2px 6px;border
 
 // A small banner added to HTML pages when the latest pull failed, so stale content is not mistaken for new.
 function staleBanner(error, commit) {
-  return `<div style="position:fixed;left:0;right:0;bottom:0;z-index:2147483647;padding:8px 14px;background:#fff8c5;color:#4d2d00;border-top:1px solid #d4a72c;font:13px/1.4 -apple-system,system-ui,sans-serif">`
+  return `<div style="position:fixed;left:0;right:0;top:0;z-index:2147483647;padding:8px 14px;background:#fff8c5;color:#4d2d00;border-bottom:1px solid #d4a72c;font:13px/1.4 -apple-system,system-ui,sans-serif">`
     + `<b>git-folder-server:</b> could not pull the latest changes, so this is commit ${escapeHtml(commit)}. ${escapeHtml(error)} Refresh to try again.</div>`;
+}
+
+// Added to HTML pages: checks every so often whether GitHub has a newer commit than the one this page
+// came from, and if so shows a card with a Refresh button and marks the tab title with ↻. It lives in a
+// shadow root so the page's CSS can't affect it, and it checks again when you come back to the tab.
+function updateNotice(pageCommit, everyMs) {
+  const config = JSON.stringify({ commit: pageCommit, every: everyMs, url: STATUS_PATH }).replace(/</g, '\\u003c');
+  return `<script>(function () {
+  var cfg = ${config};
+  var host = null, shown = null, dismissed = null, MARK = '\u21bb ';
+  function show(latest) {
+    if (latest === dismissed || latest === shown) return;
+    if (!host) {
+      host = document.createElement('git-folder-server-notice');
+      var root = host.attachShadow({ mode: 'open' });
+      root.innerHTML = '<style>:host{all:initial}.card{position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;align-items:center;gap:12px;max-width:calc(100vw - 32px);box-sizing:border-box;padding:12px 12px 12px 16px;border-radius:10px;background:#1f2328;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.25);font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;animation:in .25s ease-out}'
+        + '@keyframes in{from{transform:translateY(12px);opacity:0}}.dot{width:10px;height:10px;flex:none;border-radius:50%;background:#3fb950;box-shadow:0 0 0 4px rgba(63,185,80,.25)}'
+        + '.sub{display:block;color:#b7bdc8;font-size:12px}button{font:inherit;cursor:pointer;border-radius:6px}.go{padding:6px 14px;border:0;background:#fff;color:#1f2328;font-weight:600}.x{padding:2px 8px;border:0;background:none;color:#b7bdc8;font-size:18px;line-height:1}.x:hover{color:#fff}</style>'
+        + '<div class="card" role="status"><span class="dot"></span><span><b>A newer version is on GitHub</b><span class="sub"></span></span>'
+        + '<button class="go">Refresh</button><button class="x" title="Dismiss until the next change" aria-label="Dismiss">\u00d7</button></div>';
+      root.querySelector('.go').onclick = function () { location.reload(); };
+      root.querySelector('.x').onclick = function () { dismissed = shown; shown = null; hide(); };
+      document.documentElement.appendChild(host);
+    }
+    host.shadowRoot.querySelector('.sub').textContent = 'Commit ' + latest.slice(0, 7) + ' was pushed after this page loaded.';
+    host.style.display = '';
+    shown = latest;
+    if (document.title.indexOf(MARK) !== 0) document.title = MARK + document.title;
+  }
+  function hide() {
+    if (host) host.style.display = 'none';
+    if (document.title.indexOf(MARK) === 0) document.title = document.title.slice(MARK.length);
+  }
+  function check() {
+    fetch(cfg.url, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) {
+      if (s.latest && s.latest !== cfg.commit) show(s.latest);
+    }).catch(function () { /* server stopped or offline: try again later */ });
+  }
+  setInterval(function () { if (!document.hidden) check(); }, cfg.every);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+})();</script>`;
+}
+
+function addToPage(html, extra) {
+  return /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, `${extra}</body>`) : html + extra;
 }
 
 // ---- Main ----
@@ -160,6 +209,7 @@ if (opts.help) {
 }
 if (!opts.location) fail('Give a GitHub location.');
 if (!Number.isInteger(opts.port) || opts.port < 0 || opts.port > 65535) fail('--port must be a number from 0 to 65535.');
+if (!(opts.checkEvery >= 5)) fail('--check-every must be at least 5 seconds.');
 
 const loc = parseLocation(opts.location);
 if (!loc) fail(`Not a GitHub location: ${opts.location}`);
@@ -195,6 +245,7 @@ async function prepare() {
 }
 
 let commit = '';
+let commitFull = '';
 let pulling = null;
 let pullError = '';
 
@@ -211,13 +262,46 @@ function pull() {
       pullError = scrub(explainGitError(e.message, httpsUrl, tokenFrom) || firstFatal(e.message), token);
       console.error(`${new Date().toISOString()} pull failed: ${scrub(e.message, token)}`);
     } finally {
-      const now = await git(['rev-parse', '--short', 'HEAD'], checkout).catch(() => commit);
-      if (commit && now !== commit) console.log(`${new Date().toISOString()} updated ${commit} -> ${now}`);
-      commit = now;
+      const now = await git(['rev-parse', 'HEAD'], checkout).catch(() => commitFull);
+      if (commitFull && now !== commitFull) console.log(`${new Date().toISOString()} updated ${commit} -> ${now.slice(0, 7)}`);
+      commitFull = now;
+      commit = now.slice(0, 7);
       pulling = null;
     }
   })();
   return pulling;
+}
+
+// ---- Checking GitHub for newer commits ----
+
+const STATUS_PATH = '/.git-folder-server/status';
+let remote = { latest: null, checkedAt: 0, error: '' };
+let remoteCheck = null;
+let announced = '';
+
+// Asks GitHub for the branch's newest commit with ls-remote, which downloads nothing. Results are
+// reused for half the check interval, so any number of open tabs cost one request per interval.
+function latestRemote() {
+  if (Date.now() - remote.checkedAt < (opts.checkEvery * 1000) / 2) return Promise.resolve(remote);
+  if (remoteCheck) return remoteCheck;
+  const wanted = branch ? [`refs/heads/${branch}`, `refs/tags/${branch}^{}`, `refs/tags/${branch}`] : ['HEAD'];
+  remoteCheck = git(['ls-remote', 'origin', ...wanted], checkout)
+    .then((out) => {
+      const refs = new Map(out.split('\n').filter(Boolean).map((line) => line.split('\t').reverse()));
+      const latest = wanted.map((r) => refs.get(r)).find(Boolean) || null;
+      remote = { latest, checkedAt: Date.now(), error: '' };
+      if (latest && latest !== commitFull && latest !== announced) {
+        announced = latest;
+        console.log(`${new Date().toISOString()} GitHub has a newer commit ${latest.slice(0, 7)}; open pages will offer to refresh`);
+      }
+      return remote;
+    })
+    .catch((e) => {
+      remote = { ...remote, checkedAt: Date.now(), error: scrub(firstFatal(e.message), token) };
+      return remote;
+    })
+    .finally(() => { remoteCheck = null; });
+  return remoteCheck;
 }
 
 // Only page loads pull, so a page and its CSS, JS and images come from the same commit.
@@ -256,6 +340,11 @@ async function handle(req, res) {
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, req, 405, 'text/plain; charset=utf-8', 'Method not allowed\n', { Allow: 'GET, HEAD' });
 
+  if (pathname === STATUS_PATH) {
+    const r = await latestRemote();
+    return send(res, req, 200, 'application/json; charset=utf-8', JSON.stringify({ served: commitFull, latest: r.latest, error: r.error || undefined }));
+  }
+
   if (isPageLoad(req, pathname)) await pull();
 
   // Never serve .git or other dot-files, and never leave the served folder.
@@ -287,10 +376,9 @@ async function handle(req, res) {
 
   const type = TYPES[path.extname(target).toLowerCase()] || 'application/octet-stream';
   let body = fs.readFileSync(target);
-  if (pullError && type.startsWith('text/html')) {
-    const html = body.toString('utf8');
-    const banner = staleBanner(pullError, commit);
-    body = /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, `${banner}</body>`) : html + banner;
+  if (type.startsWith('text/html') && (pullError || opts.notify)) {
+    const extra = (pullError ? staleBanner(pullError, commit) : '') + (opts.notify ? updateNotice(commitFull, opts.checkEvery * 1000) : '');
+    body = addToPage(body.toString('utf8'), extra);
   }
   return send(res, req, 200, type, body);
 }
@@ -308,7 +396,8 @@ if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
   console.error(`\nThe folder "${folder}" is not in ${loc.owner}/${loc.repo}${branch ? `@${branch}` : ''}.`);
   process.exit(1);
 }
-commit = await git(['rev-parse', '--short', 'HEAD'], checkout);
+commitFull = await git(['rev-parse', 'HEAD'], checkout);
+commit = commitFull.slice(0, 7);
 
 const server = http.createServer((req, res) => {
   const started = Date.now();
@@ -317,7 +406,9 @@ const server = http.createServer((req, res) => {
       console.error(e);
       if (!res.headersSent) send(res, req, 500, 'text/plain; charset=utf-8', 'Internal error\n');
     })
-    .finally(() => console.log(`${new Date().toISOString()} ${req.method} ${req.url} -> ${res.statusCode} (${Date.now() - started} ms)`));
+    .finally(() => {
+      if (!req.url.startsWith(STATUS_PATH)) console.log(`${new Date().toISOString()} ${req.method} ${req.url} -> ${res.statusCode} (${Date.now() - started} ms)`);
+    });
 });
 
 server.on('error', (e) => {
@@ -330,4 +421,5 @@ server.listen(opts.port, opts.host, () => {
   const host = opts.host.includes(':') ? `[${opts.host}]` : opts.host;
   console.log(`Commit ${commit}, checked out in ${checkout}`);
   console.log(`Open http://${host}:${port}/  (refresh the browser to pull the latest changes)`);
+  if (opts.notify) console.log(`Open pages check GitHub every ${opts.checkEvery} s and show a notice when a newer commit is pushed.`);
 });

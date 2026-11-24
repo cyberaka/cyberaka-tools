@@ -32,6 +32,8 @@ Options:
 | `--port N` | Port to listen on (default 8080; `0` picks a free one). |
 | `--host ADDR` | Address to listen on (default `127.0.0.1`, this computer only). |
 | `--cache DIR` | Where to keep the checkout (default: a folder in your temp directory). |
+| `--check-every S` | While a page is open, check GitHub for new commits every S seconds (default 30, minimum 5). |
+| `--no-notify` | Don't add the "newer version" notice to pages; serve the HTML exactly as committed. |
 
 ## What it serves
 
@@ -44,9 +46,20 @@ Options:
 
 Loading or refreshing a page runs `git fetch` and moves the checkout to the newest commit of the branch. That pull finishes before the page is sent. The page's CSS, JS and images don't trigger a pull of their own, so a page and its files always come from the same commit. The terminal logs each update (`updated 1a2b3c4 -> 5d6e7f8`), and every response carries the commit in an `X-Git-Commit` header.
 
-If a pull fails (network down, token expired), the last checkout is still served, and HTML pages show a yellow banner saying so. Refresh to try again.
+If a pull fails (network down, token expired), the last checkout is still served, and HTML pages show a yellow banner at the top saying so. Refresh to try again.
 
 The checkout is shallow and contains only the chosen folder, so big repos stay quick. Restarting reuses it.
+
+## Knowing when to refresh
+
+You don't have to keep refreshing to find out whether something changed. While a page is open, it checks every 30 seconds (and as soon as you switch back to its tab) whether the branch on GitHub has moved past the commit the page came from. If it has:
+
+- a card appears in the bottom-right corner: **A newer version is on GitHub**, with the new commit and a **Refresh** button;
+- the tab's title gets a **↻** in front, so you can spot it among background tabs.
+
+Click **Refresh** to load the new version, or **×** to hide the card until the next push. The check uses `git ls-remote`, which only asks GitHub for the latest commit ID and downloads nothing; however many tabs are open, the server makes at most one check per interval. The terminal also logs `GitHub has a newer commit …` when it first notices one.
+
+To do this, the server adds a small script to every HTML page it serves. The script and its card are kept apart from the page (in a shadow root), so the page's own CSS and JavaScript are unaffected. Use `--no-notify` to serve pages exactly as committed.
 
 ## Private repos
 
